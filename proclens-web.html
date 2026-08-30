@@ -1,0 +1,935 @@
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+
+<style>
+:root{
+  --ground:#EEF1F4; --panel:#FFFFFF; --ink:#16202B; --muted:#5C6B7A; --faint:#8695A3;
+  --rule:#D6DEE6; --rule-soft:#E6EBF0;
+  --ultra:#2B4CE6; --ultra-wash:#EBEEFD;
+  --amber:#B76A05; --amber-wash:#FBF0DF;
+  --jade:#0B7A63; --jade-wash:#E4F2EE;
+  --claret:#A32338; --claret-wash:#F9E8EB;
+  --violet:#6B3FA0; --violet-wash:#F0EAF8;
+  --sans:"IBM Plex Sans",system-ui,-apple-system,sans-serif;
+  --cond:"IBM Plex Sans Condensed","IBM Plex Sans",system-ui,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--ground);color:var(--ink);font:400 14px/1.5 var(--sans);-webkit-font-smoothing:antialiased}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer;background:none;border:none}
+a{color:var(--ultra)}
+
+.eyebrow{font:700 10px/1 var(--cond);letter-spacing:.11em;text-transform:uppercase;color:var(--faint)}
+.mono{font-family:var(--mono);font-size:12.5px;font-variant-numeric:tabular-nums}
+
+/* ---------- masthead ---------- */
+.mast{background:var(--ink);color:#fff;padding:14px 20px;display:flex;align-items:center;gap:20px;flex-wrap:wrap}
+.wordmark{font:700 21px/1 var(--cond);letter-spacing:-.01em}
+.wordmark b{color:#8FA6FF;font-weight:700}
+.mast .tag{font:400 12px/1.4 var(--sans);color:#9DACBB;max-width:32ch}
+.snapstrip{margin-left:auto;display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+.snapstat{display:flex;flex-direction:column;gap:3px}
+.snapstat .k{font:700 9px/1 var(--cond);letter-spacing:.11em;text-transform:uppercase;color:#7E8F9F}
+.snapstat .v{font-family:var(--mono);font-size:13px;font-weight:500;color:#fff;font-variant-numeric:tabular-nums}
+.btn{border:1px solid var(--rule);background:var(--panel);padding:7px 13px;border-radius:3px;font:500 13px var(--sans);color:var(--ink)}
+.btn:hover{border-color:var(--ink)}
+.btn.primary{background:var(--ultra);border-color:var(--ultra);color:#fff}
+.btn.primary:hover{background:#1F3ACB}
+.btn.ghost{background:transparent;border-color:#3C4B5C;color:#DCE3EA}
+.btn.ghost:hover{border-color:#8FA6FF;color:#fff}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn.sm{padding:5px 10px;font-size:12px}
+
+/* ---------- tabs ---------- */
+.tabbar{background:var(--panel);border-bottom:1px solid var(--rule);padding:0 20px;display:flex;gap:2px;overflow-x:auto}
+.tab{padding:11px 15px 9px;font:700 11px/1 var(--cond);letter-spacing:.09em;text-transform:uppercase;color:var(--muted);border-bottom:2px solid transparent;white-space:nowrap;display:flex;align-items:center;gap:7px}
+.tab[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--ultra)}
+.tab .count{font-family:var(--mono);font-size:10px;font-weight:600;background:var(--rule-soft);color:var(--muted);padding:2px 5px;border-radius:2px;letter-spacing:0}
+.tab[aria-selected="true"] .count{background:var(--ultra-wash);color:var(--ultra)}
+.tab .count.hot{background:var(--amber-wash);color:var(--amber)}
+
+/* ---------- shell ---------- */
+.shell{display:grid;grid-template-columns:262px minmax(0,1fr);gap:0;align-items:start}
+.rail{border-right:1px solid var(--rule);background:var(--panel);padding:18px;min-height:calc(100vh - 108px);position:sticky;top:0}
+.main{padding:18px 20px 60px;min-width:0}
+
+.fgroup{margin-bottom:17px}
+.fgroup label.lb{display:block;margin-bottom:6px}
+.inp{width:100%;padding:7px 9px;border:1px solid var(--rule);border-radius:3px;background:var(--panel);font-size:13px}
+.inp:focus{outline:2px solid var(--ultra);outline-offset:-1px;border-color:var(--ultra)}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+.chipset{display:flex;flex-wrap:wrap;gap:5px}
+.chip{border:1px solid var(--rule);border-radius:3px;padding:4px 8px;font-family:var(--mono);font-size:11px;font-weight:500;color:var(--muted);background:var(--panel)}
+.chip[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:#fff}
+.chip.flag[aria-pressed="true"]{background:var(--amber);border-color:var(--amber)}
+
+/* ---------- results ---------- */
+.toolbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+.toolbar .hits{font:700 13px/1 var(--cond);letter-spacing:.02em}
+.toolbar .hits em{font-style:normal;font-family:var(--mono);font-weight:600}
+
+.card{background:var(--panel);border:1px solid var(--rule);border-radius:3px}
+.rec{background:var(--panel);border:1px solid var(--rule);border-radius:3px;padding:12px 14px;margin-bottom:7px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 16px;cursor:pointer;border-left:3px solid var(--rule)}
+.rec:hover{border-color:var(--faint);border-left-color:var(--ultra)}
+.rec.ev-new{border-left-color:var(--jade)}
+.rec.ev-value{border-left-color:var(--violet)}
+.rec.ev-retro{border-left-color:var(--amber)}
+.rec.ev-gone{border-left-color:var(--claret)}
+.rec h3{font:600 14.5px/1.35 var(--sans);margin-bottom:3px}
+.rec .meta{font-size:12.5px;color:var(--muted);display:flex;flex-wrap:wrap;gap:4px 9px;align-items:baseline}
+.rec .meta b{font-weight:600;color:var(--ink)}
+.rec .amt{font-family:var(--mono);font-size:15px;font-weight:600;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+.rec .sub{font-family:var(--mono);font-size:11px;color:var(--faint);text-align:right;white-space:nowrap}
+.badges{display:flex;flex-wrap:wrap;gap:4px;grid-column:1/-1;margin-top:2px}
+.bdg{font-family:var(--mono);font-size:10px;font-weight:600;letter-spacing:.02em;padding:2px 6px;border-radius:2px;background:var(--rule-soft);color:var(--muted)}
+.bdg.amber{background:var(--amber-wash);color:var(--amber)}
+.bdg.jade{background:var(--jade-wash);color:var(--jade)}
+.bdg.violet{background:var(--violet-wash);color:var(--violet)}
+.bdg.claret{background:var(--claret-wash);color:var(--claret)}
+.bdg.ultra{background:var(--ultra-wash);color:var(--ultra)}
+
+.empty{padding:44px 24px;text-align:center;color:var(--muted);background:var(--panel);border:1px solid var(--rule);border-radius:3px}
+.empty h3{font:700 17px/1.3 var(--cond);color:var(--ink);margin-bottom:7px;letter-spacing:.01em}
+.empty p{max-width:46ch;margin:0 auto 14px;font-size:13.5px}
+
+/* ---------- overview bars ---------- */
+.panelgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(255px,1fr));gap:12px;margin-bottom:16px}
+.pnl{background:var(--panel);border:1px solid var(--rule);border-radius:3px;padding:14px}
+.pnl h4{margin-bottom:11px}
+.bar{margin-bottom:8px}
+.bar .lbl{display:flex;justify-content:space-between;gap:10px;font-size:12px;margin-bottom:3px}
+.bar .lbl span:last-child{font-family:var(--mono);font-size:11.5px;color:var(--muted);white-space:nowrap}
+.bar .lbl span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bar .track{height:5px;background:var(--rule-soft);border-radius:2px;overflow:hidden}
+.bar .fill{height:100%;background:var(--ultra)}
+.bar.warn .fill{background:var(--amber)}
+
+/* ---------- drawer + mutation trace (signature) ---------- */
+.scrim{position:fixed;inset:0;background:rgba(22,32,43,.42);z-index:40}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:min(560px,100%);background:var(--panel);z-index:41;overflow-y:auto;border-left:1px solid var(--rule);box-shadow:-14px 0 40px rgba(22,32,43,.13)}
+.dhead{padding:18px 20px;border-bottom:1px solid var(--rule);position:sticky;top:0;background:var(--panel);z-index:2}
+.dhead h2{font:600 18px/1.32 var(--sans);margin:5px 0 8px}
+.dbody{padding:18px 20px 40px}
+.kv{display:grid;grid-template-columns:118px minmax(0,1fr);gap:5px 12px;font-size:13px;margin-bottom:20px}
+.kv dt{font:700 10px/1.5 var(--cond);letter-spacing:.09em;text-transform:uppercase;color:var(--faint);padding-top:2px}
+.kv dd{font-family:var(--mono);font-size:12.5px;word-break:break-word}
+.dsec{margin-bottom:22px}
+.dsec h4{margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--rule-soft)}
+
+.trace{position:relative;padding-left:19px}
+.trace:before{content:"";position:absolute;left:4px;top:5px;bottom:5px;width:1px;background:var(--rule)}
+.tnode{position:relative;margin-bottom:15px}
+.tnode:before{content:"";position:absolute;left:-19px;top:4px;width:9px;height:9px;border-radius:50%;background:var(--panel);border:2px solid var(--faint)}
+.tnode.retro:before{border-color:var(--amber);background:var(--amber)}
+.tnode.new:before{border-color:var(--jade);background:var(--jade)}
+.tnode.value:before{border-color:var(--violet);background:var(--violet)}
+.tnode.gone:before{border-color:var(--claret);background:var(--claret)}
+.tnode .when{font-family:var(--mono);font-size:11px;color:var(--faint);display:flex;align-items:center;gap:7px;margin-bottom:5px}
+.delta{font-family:var(--mono);font-size:12px;padding:5px 8px;background:var(--ground);border-radius:2px;margin-bottom:4px;line-height:1.6}
+.delta .f{font-weight:600;display:block;font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--faint)}
+.delta s{color:var(--claret);text-decoration-thickness:1px}
+.delta i{font-style:normal;color:var(--jade);font-weight:500}
+.retro-note{background:var(--amber-wash);border-left:3px solid var(--amber);padding:9px 12px;font-size:12.5px;border-radius:2px;margin-bottom:14px}
+
+/* ---------- watch ---------- */
+.watch{background:var(--panel);border:1px solid var(--rule);border-radius:3px;padding:13px 15px;margin-bottom:8px;display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap}
+.watch .info{flex:1;min-width:190px}
+.watch .nm{font-weight:600;margin-bottom:3px}
+.watch .q{font-family:var(--mono);font-size:11.5px;color:var(--muted);word-break:break-word}
+.watch .n{font-family:var(--mono);font-size:22px;font-weight:600;line-height:1}
+.watch .n.hot{color:var(--amber)}
+
+.note{background:var(--ultra-wash);border:1px solid #C9D3FA;border-radius:3px;padding:11px 13px;font-size:12.5px;margin-bottom:14px}
+.note.warn{background:var(--amber-wash);border-color:#EBD3AC}
+.imp{display:flex;gap:9px;flex-wrap:wrap;margin-bottom:12px}
+textarea.inp{min-height:104px;font-family:var(--mono);font-size:11.5px;resize:vertical}
+.hidden{display:none!important}
+:focus-visible{outline:2px solid var(--ultra);outline-offset:2px}
+
+@media (max-width:860px){
+  .shell{grid-template-columns:1fr}
+  .rail{position:static;min-height:0;border-right:none;border-bottom:1px solid var(--rule)}
+  .rail.collapsed{display:none}
+  .snapstrip{width:100%;margin-left:0}
+}
+@media (prefers-reduced-motion:no-preference){
+  .rec{transition:border-color .13s ease}
+}
+</style>
+
+<header class="mast">
+  <div>
+    <div class="wordmark">Proc<b>Lens</b></div>
+    <div class="tag">Australian government contract notices, and what changed between snapshots.</div>
+  </div>
+  <div class="snapstrip">
+    <div class="snapstat"><span class="k">Records</span><span class="v" id="s-count">—</span></div>
+    <div class="snapstat"><span class="k">Snapshot</span><span class="v" id="s-when">none</span></div>
+    <div class="snapstat"><span class="k">Changes</span><span class="v" id="s-chg">—</span></div>
+    <button class="btn ghost sm" id="btn-import">Import snapshot</button>
+  </div>
+</header>
+
+<nav class="tabbar" role="tablist">
+  <button class="tab" role="tab" data-view="search" aria-selected="true">Search <span class="count" id="t-search">0</span></button>
+  <button class="tab" role="tab" data-view="changes" aria-selected="false">Changes <span class="count" id="t-changes">0</span></button>
+  <button class="tab" role="tab" data-view="watch" aria-selected="false">Watchlist <span class="count" id="t-watch">0</span></button>
+  <button class="tab" role="tab" data-view="overview" aria-selected="false">Overview</button>
+  <button class="tab" role="tab" data-view="data" aria-selected="false">Data</button>
+</nav>
+
+<div class="shell">
+  <aside class="rail" id="rail">
+    <div class="fgroup">
+      <label class="lb eyebrow" for="q">Keyword</label>
+      <input class="inp" id="q" placeholder="title, supplier, buyer, description" autocomplete="off">
+    </div>
+    <div class="fgroup">
+      <span class="lb eyebrow">Jurisdiction</span>
+      <div class="chipset" id="f-jur"></div>
+    </div>
+    <div class="fgroup">
+      <span class="lb eyebrow">Procurement method</span>
+      <div class="chipset" id="f-method"></div>
+    </div>
+    <div class="fgroup">
+      <span class="lb eyebrow">Integrity flags</span>
+      <div class="chipset" id="f-flags"></div>
+    </div>
+    <div class="fgroup">
+      <span class="lb eyebrow">Value (AUD)</span>
+      <div class="row2">
+        <input class="inp mono" id="f-min" placeholder="min" inputmode="numeric">
+        <input class="inp mono" id="f-max" placeholder="max" inputmode="numeric">
+      </div>
+    </div>
+    <div class="fgroup">
+      <span class="lb eyebrow">Published between</span>
+      <div class="row2">
+        <input class="inp mono" id="f-from" type="date">
+        <input class="inp mono" id="f-to" type="date">
+      </div>
+    </div>
+    <div class="fgroup">
+      <label class="lb eyebrow" for="sort">Order by</label>
+      <select class="inp" id="sort">
+        <option value="rel">Relevance</option>
+        <option value="pub">Newest published</option>
+        <option value="val">Highest value</option>
+        <option value="valasc">Lowest value</option>
+        <option value="chg">Most recently changed</option>
+      </select>
+    </div>
+    <div style="display:flex;gap:7px">
+      <button class="btn sm" id="btn-clear">Clear</button>
+      <button class="btn sm primary" id="btn-watch" style="flex:1">Save as watch</button>
+    </div>
+  </aside>
+
+  <main class="main">
+    <section id="v-search">
+      <div class="toolbar">
+        <span class="hits" id="hits">No data loaded</span>
+        <span style="flex:1"></span>
+        <button class="btn sm" id="btn-csv">Export CSV</button>
+        <button class="btn sm hidden" id="btn-rail">Filters</button>
+      </div>
+      <div id="results"></div>
+      <div style="margin-top:14px;text-align:center"><button class="btn hidden" id="btn-more">Show more</button></div>
+    </section>
+
+    <section id="v-changes" class="hidden">
+      <div class="toolbar">
+        <span class="hits" id="chg-hits">—</span>
+        <span style="flex:1"></span>
+        <div class="chipset" id="f-evt"></div>
+      </div>
+      <div id="changes"></div>
+    </section>
+
+    <section id="v-watch" class="hidden">
+      <div class="note">Watches run against each snapshot you import. A watch fires when a contract that matches it is newly published, amended, revalued, or quietly edited after the fact.</div>
+      <div id="watches"></div>
+    </section>
+
+    <section id="v-overview" class="hidden"><div class="panelgrid" id="overview"></div></section>
+
+    <section id="v-data" class="hidden">
+      <div class="note" id="storenote"></div>
+      <div class="card" style="padding:16px;margin-bottom:12px">
+        <h4 class="eyebrow" style="margin-bottom:9px">Import a snapshot</h4>
+        <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Load a bundle produced by <span class="mono">export_bundle.py</span>. Each import is diffed against what's already held: new notices, changed values, and retrospective edits are recorded, then the corpus is replaced.</p>
+        <div class="imp">
+          <input type="file" id="file" accept=".json,application/json" class="inp" style="flex:1;min-width:190px;padding:5px">
+          <button class="btn primary" id="btn-demo">Load demo data</button>
+          <button class="btn" id="btn-refresh">Simulate weekly refresh</button>
+        </div>
+        <details><summary style="cursor:pointer;font-size:12.5px;color:var(--muted)">Or paste bundle JSON</summary>
+          <textarea class="inp" id="paste" style="margin-top:9px" placeholder='{"captured_at":"2026-08-24","records":[…]}'></textarea>
+          <button class="btn sm" id="btn-paste" style="margin-top:7px">Import pasted bundle</button>
+        </details>
+      </div>
+      <div class="card" style="padding:16px">
+        <h4 class="eyebrow" style="margin-bottom:9px">Held data</h4>
+        <div id="datastat" class="mono" style="font-size:12.5px;line-height:1.9;color:var(--muted)"></div>
+        <button class="btn sm" id="btn-wipe" style="margin-top:12px;color:var(--claret);border-color:#E3BFC6">Erase everything</button>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div id="drawer-host"></div>
+
+<script>
+/* ============================ storage ============================ */
+const mem = {};
+const hasStore = typeof window !== "undefined" && window.storage && typeof window.storage.get === "function";
+const store = {
+  async get(k){ if(!hasStore) return k in mem ? mem[k] : null;
+    try{ const r = await window.storage.get(k); return r ? JSON.parse(r.value) : null; }catch(e){ return null; } },
+  async set(k,v){ if(!hasStore){ mem[k]=v; return true; }
+    try{ await window.storage.set(k, JSON.stringify(v)); return true; }catch(e){ console.error("store.set",k,e); return false; } },
+  async del(k){ if(!hasStore){ delete mem[k]; return; }
+    try{ await window.storage.delete(k); }catch(e){} }
+};
+const CHUNK = 2500;
+
+/* ============================ state ============================ */
+const S = { corpus:[], byId:new Map(), changes:[], watches:[], meta:{}, page:1, evtFilter:new Set(), view:"search" };
+const F = { q:"", jur:new Set(), method:new Set(), flags:new Set(), min:null, max:null, from:"", to:"", sort:"rel" };
+const PER = 40;
+const JURS = ["CTH","NSW","VIC","QLD","WA","SA","TAS","NT","ACT","LG"];
+const METHODS = ["Open tender","Limited tender","Prequalified tender","Panel/standing offer"];
+const FLAGS = {
+  late_publish:"published late", value_growth:"value growth", threshold_hugging:"under threshold",
+  backdated:"backdated start", limited_tender:"limited tender", long_term:"long term", confidential:"confidential"
+};
+const EVT = { new:"new", value:"value changed", amended:"amended", gone:"withdrawn", retro:"retrospective edit" };
+const WATCHED_FIELDS = ["val","end","start","pub","method","supplier","buyer","conf","title","flags"];
+const FIELD_LABEL = { val:"value", end:"end date", start:"start date", pub:"published", method:"method",
+  supplier:"supplier", buyer:"buyer", conf:"confidentiality", title:"title", flags:"flags" };
+
+/* ============================ helpers ============================ */
+const $ = s => document.querySelector(s);
+const el = (t,c,x) => { const n=document.createElement(t); if(c)n.className=c; if(x!=null)n.textContent=x; return n; };
+const esc = s => String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const money = v => v==null ? "—" : "$" + Math.round(v).toLocaleString("en-AU");
+const shortMoney = v => { if(v==null) return "—"; const a=Math.abs(v);
+  if(a>=1e9) return "$"+(v/1e9).toFixed(1)+"b"; if(a>=1e6) return "$"+(v/1e6).toFixed(1)+"m";
+  if(a>=1e3) return "$"+(v/1e3).toFixed(0)+"k"; return "$"+Math.round(v); };
+const days = (a,b) => (!a||!b) ? null : Math.round((new Date(b)-new Date(a))/864e5);
+const todayISO = () => new Date().toISOString().slice(0,10);
+const norm = s => String(s||"").toUpperCase().replace(/\b(PTY|LTD|LIMITED|PROPRIETARY|THE|INC|GROUP|AUST|AUSTRALIA)\b/g,"").replace(/[^A-Z0-9 ]/g,"").replace(/\s+/g," ").trim();
+
+/* ============================ persistence ============================ */
+async function loadAll(){
+  const meta = await store.get("pl:meta");
+  if(meta){
+    S.meta = meta;
+    const parts = [];
+    for(let i=0;i<(meta.chunks||0);i++){ const c = await store.get("pl:corpus:"+i); if(c) parts.push(...c); }
+    S.corpus = parts;
+  }
+  S.changes = (await store.get("pl:changes")) || [];
+  S.watches = (await store.get("pl:watches")) || [];
+  reindex();
+}
+async function saveCorpus(){
+  const n = Math.ceil(S.corpus.length / CHUNK);
+  for(let i=0;i<n;i++) await store.set("pl:corpus:"+i, S.corpus.slice(i*CHUNK,(i+1)*CHUNK));
+  for(let i=n;i<(S.meta.chunks||0);i++) await store.del("pl:corpus:"+i);
+  S.meta.chunks = n; S.meta.count = S.corpus.length;
+  await store.set("pl:meta", S.meta);
+}
+async function saveChanges(){ await store.set("pl:changes", S.changes.slice(0,4000)); }
+async function saveWatches(){ await store.set("pl:watches", S.watches); }
+function reindex(){ S.byId = new Map(S.corpus.map(r=>[r.id,r])); }
+
+/* ============================ diff engine ============================ */
+function diffSnapshot(incoming, capturedAt){
+  const nm = new Map(incoming.map(r=>[r.id,r]));
+  const events = [];
+  for(const [id,n] of nm){
+    const o = S.byId.get(id);
+    if(!o){
+      events.push({ ts:capturedAt, t:"new", id, cn:n.cn, title:n.title, buyer:n.buyer,
+        supplier:n.supplier, val:n.val, jur:n.jur, ch:[] });
+      continue;
+    }
+    const ch = [];
+    for(const f of WATCHED_FIELDS){
+      const a = o[f]==null?null:String(o[f]), b = n[f]==null?null:String(n[f]);
+      if(a!==b) ch.push({ f, from:o[f]??null, to:n[f]??null });
+    }
+    if(!ch.length) continue;
+    const age = days(n.pub, capturedAt);
+    const retro = age!=null && age > 42;                 // CPR reporting window has long closed
+    const t = ch.some(c=>c.f==="val") ? "value" : "amended";
+    events.push({ ts:capturedAt, t, retro, id, cn:n.cn, title:n.title, buyer:n.buyer,
+      supplier:n.supplier, val:n.val, jur:n.jur, ch });
+  }
+  for(const [id,o] of S.byId) if(!nm.has(id))
+    events.push({ ts:capturedAt, t:"gone", id, cn:o.cn, title:o.title, buyer:o.buyer,
+      supplier:o.supplier, val:o.val, jur:o.jur, ch:[] });
+  return events;
+}
+
+async function importBundle(bundle){
+  if(!bundle || !Array.isArray(bundle.records)) throw new Error("Bundle needs a records array.");
+  const captured = bundle.captured_at || todayISO();
+  const recs = bundle.records.map(normaliseRecord).filter(r=>r.id);
+  const first = S.corpus.length === 0;
+  const events = first ? [] : diffSnapshot(recs, captured);
+  S.corpus = recs; reindex();
+  S.meta = { count:recs.length, captured_at:captured, imported_at:new Date().toISOString(),
+    source:bundle.source || "bundle", chunks:S.meta.chunks||0, imports:(S.meta.imports||0)+1,
+    last_events:events.length };
+  S.changes = [...events, ...S.changes];
+  await saveCorpus(); await saveChanges();
+  return { added:recs.length, events:events.length, first };
+}
+
+function normaliseRecord(r){
+  const o = {
+    id: r.id || (r.jur||r.jurisdiction||"CTH")+":"+(r.cn||r.native_id||r.ocid||""),
+    jur: r.jur || r.jurisdiction || "CTH",
+    cn: r.cn || r.native_id || "",
+    ocid: r.ocid || null,
+    parent: r.parent || r.parent_id || null,
+    amd: r.amd ?? r.amendment_no ?? null,
+    title: r.title || "",
+    desc: r.desc || r.description || "",
+    buyer: r.buyer || r.buyer_name || "",
+    branch: r.branch || r.buyer_branch || null,
+    supplier: r.supplier || r.supplier_name || "",
+    abn: r.abn || r.supplier_abn || null,
+    val: r.val ?? r.value_amount ?? null,
+    val0: r.val0 ?? r.value_original ?? null,
+    pub: r.pub || r.date_published || null,
+    sign: r.sign || r.date_signed || null,
+    start: r.start || r.date_start || null,
+    end: r.end || r.date_end || null,
+    method: r.method || r.procurement_method || "",
+    cat: r.cat || r.category_name || "",
+    conf: r.conf ?? r.confidential_contract ?? 0,
+    url: r.url || null,
+    flags: Array.isArray(r.flags) ? r.flags.join(",") : (r.flags || "")
+  };
+  o.snorm = norm(o.supplier);
+  return o;
+}
+
+/* ============================ search ============================ */
+function matches(r, f){
+  if(f.jur.size && !f.jur.has(r.jur)) return false;
+  if(f.method.size && !f.method.has(r.method)) return false;
+  if(f.flags.size){ const fl=(r.flags||"").split(","); 
+    for(const x of f.flags){ if(x==="confidential"){ if(!r.conf) return false; } else if(!fl.includes(x)) return false; } }
+  if(f.min!=null && (r.val==null || r.val < f.min)) return false;
+  if(f.max!=null && (r.val==null || r.val > f.max)) return false;
+  if(f.from && (!r.pub || r.pub < f.from)) return false;
+  if(f.to && (!r.pub || r.pub > f.to)) return false;
+  if(f.q){
+    const toks = f.q.toLowerCase().split(/\s+/).filter(Boolean);
+    const hay = (r.title+" "+r.supplier+" "+r.buyer+" "+r.desc+" "+r.cat+" "+r.cn).toLowerCase();
+    for(const t of toks) if(!hay.includes(t)) return false;
+  }
+  return true;
+}
+function score(r,q){
+  if(!q) return 0;
+  const toks = q.toLowerCase().split(/\s+/).filter(Boolean); let s=0;
+  for(const t of toks){
+    if(r.title.toLowerCase().includes(t)) s+=3;
+    if(r.supplier.toLowerCase().includes(t)) s+=2.5;
+    if(r.buyer.toLowerCase().includes(t)) s+=2;
+    if((r.cat||"").toLowerCase().includes(t)) s+=1.2;
+    if((r.desc||"").toLowerCase().includes(t)) s+=1;
+    if((r.cn||"").toLowerCase()===t) s+=8;
+  }
+  return s;
+}
+function runSearch(){
+  let out = S.corpus.filter(r=>matches(r,F));
+  const lastChg = new Map(); for(const e of S.changes) if(!lastChg.has(e.id)) lastChg.set(e.id, e.ts);
+  if(F.sort==="rel" && F.q) out.sort((a,b)=>score(b,F.q)-score(a,F.q) || (b.pub||"").localeCompare(a.pub||""));
+  else if(F.sort==="val") out.sort((a,b)=>(b.val??-1)-(a.val??-1));
+  else if(F.sort==="valasc") out.sort((a,b)=>(a.val??Infinity)-(b.val??Infinity));
+  else if(F.sort==="chg") out.sort((a,b)=>String(lastChg.get(b.id)||"").localeCompare(String(lastChg.get(a.id)||"")));
+  else out.sort((a,b)=>(b.pub||"").localeCompare(a.pub||""));
+  return out;
+}
+
+/* ============================ render ============================ */
+function eventTypeFor(id){
+  const e = S.changes.find(x=>x.id===id);
+  if(!e) return null;
+  return e.retro ? "retro" : e.t;
+}
+function recordCard(r, opts={}){
+  const ev = opts.ev || eventTypeFor(r.id);
+  const n = el("div","rec"+(ev?" ev-"+ev:""));
+  n.tabIndex = 0; n.setAttribute("role","button");
+  const left = el("div");
+  left.appendChild(el("h3",null,r.title || "(untitled notice)"));
+  const meta = el("div","meta");
+  meta.innerHTML = `<b>${esc(r.supplier||"—")}</b> <span>→</span> ${esc(r.buyer||"—")}`;
+  left.appendChild(meta);
+  const meta2 = el("div","meta");
+  meta2.innerHTML = `<span class="mono">${esc(r.cn||"")}</span> · ${esc(r.jur)} · ${esc(r.method||"—")} · pub ${esc(r.pub||"—")}`;
+  left.appendChild(meta2);
+  n.appendChild(left);
+  const right = el("div");
+  right.appendChild(el("div","amt",shortMoney(r.val)));
+  if(r.val0!=null && r.val!=null && r.val0!==r.val)
+    right.appendChild(el("div","sub","was "+shortMoney(r.val0)));
+  n.appendChild(right);
+  const b = el("div","badges");
+  if(ev) b.appendChild(el("span","bdg "+({new:"jade",value:"violet",retro:"amber",gone:"claret",amended:"ultra"}[ev]||""), EVT[ev]));
+  for(const f of (r.flags||"").split(",").filter(Boolean))
+    b.appendChild(el("span","bdg"+(f==="late_publish"||f==="value_growth"||f==="threshold_hugging"?" amber":""), FLAGS[f]||f));
+  if(r.conf) b.appendChild(el("span","bdg claret","confidential"));
+  if(b.children.length) n.appendChild(b);
+  const open = ()=>openDrawer(r.id);
+  n.addEventListener("click",open);
+  n.addEventListener("keydown",e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); open(); }});
+  return n;
+}
+
+function renderSearch(){
+  const res = runSearch();
+  $("#t-search").textContent = res.length.toLocaleString();
+  const box = $("#results"); box.innerHTML="";
+  if(!S.corpus.length){
+    box.appendChild(emptyState("No snapshot loaded",
+      "Import a bundle from export_bundle.py, or load the demo set to see how the diffing works.",
+      "Load demo data", ()=>loadDemo()));
+    $("#hits").textContent = "No data loaded"; return;
+  }
+  if(!res.length){
+    box.appendChild(emptyState("Nothing matches these filters","Widen the value range, clear a jurisdiction, or drop a keyword.","Clear filters",clearFilters));
+    $("#hits").textContent = "0 of "+S.corpus.length.toLocaleString(); return;
+  }
+  const total = res.reduce((s,r)=>s+(r.val||0),0);
+  $("#hits").innerHTML = `<em>${res.length.toLocaleString()}</em> notices · <em>${money(total)}</em> committed`;
+  const slice = res.slice(0, S.page*PER);
+  const frag = document.createDocumentFragment();
+  for(const r of slice) frag.appendChild(recordCard(r));
+  box.appendChild(frag);
+  $("#btn-more").classList.toggle("hidden", slice.length>=res.length);
+}
+
+function emptyState(h,p,btn,fn){
+  const n = el("div","empty");
+  n.appendChild(el("h3",null,h)); n.appendChild(el("p",null,p));
+  if(btn){ const b=el("button","btn primary",btn); b.onclick=fn; n.appendChild(b); }
+  return n;
+}
+
+function renderChanges(){
+  const box = $("#changes"); box.innerHTML="";
+  const sel = S.evtFilter;
+  const list = S.changes.filter(e=>{
+    if(!sel.size) return true;
+    const k = e.retro ? "retro" : e.t;
+    return sel.has(k) || (sel.has("retro") && e.retro);
+  });
+  $("#t-changes").textContent = S.changes.length.toLocaleString();
+  $("#t-changes").classList.toggle("hot", S.changes.some(e=>e.retro));
+  if(!S.changes.length){
+    box.appendChild(emptyState("No changes recorded yet",
+      "Changes appear after your second import. The first snapshot is the baseline — there's nothing to compare it against.",
+      S.corpus.length?"Simulate weekly refresh":null, simulateRefresh));
+    $("#chg-hits").textContent="—"; return;
+  }
+  const retro = S.changes.filter(e=>e.retro).length;
+  $("#chg-hits").innerHTML = `<em>${list.length.toLocaleString()}</em> events · <em>${retro}</em> retrospective`;
+  const frag = document.createDocumentFragment();
+  for(const e of list.slice(0,300)){
+    const r = S.byId.get(e.id) || { id:e.id, cn:e.cn, title:e.title, buyer:e.buyer, supplier:e.supplier,
+      val:e.val, jur:e.jur, method:"", pub:"", flags:"" };
+    const card = recordCard(r, { ev: e.retro ? "retro" : e.t });
+    if(e.ch && e.ch.length){
+      const d = el("div","badges");
+      for(const c of e.ch.slice(0,4)) d.appendChild(el("span","bdg", FIELD_LABEL[c.f]||c.f));
+      card.appendChild(d);
+    }
+    frag.appendChild(card);
+  }
+  box.appendChild(frag);
+}
+
+function renderWatches(){
+  const box = $("#watches"); box.innerHTML="";
+  $("#t-watch").textContent = S.watches.length;
+  if(!S.watches.length){
+    box.appendChild(emptyState("No watches yet",
+      "Build a search in the left rail — a supplier, an agency, a value band — then choose Save as watch. It will be checked against every snapshot you import.",null));
+    return;
+  }
+  let anyHot=false;
+  for(const w of S.watches){
+    const f = rehydrate(w.f);
+    const hits = S.changes.filter(e=>{ const r=S.byId.get(e.id); return r ? matches(r,f) : false; });
+    const retro = hits.filter(e=>e.retro).length;
+    if(retro) anyHot=true;
+    const n = el("div","watch");
+    const info = el("div","info");
+    info.appendChild(el("div","nm",w.name));
+    info.appendChild(el("div","q",describe(f)));
+    n.appendChild(info);
+    const cnt = el("div");
+    cnt.appendChild(el("div","n"+(retro?" hot":""), String(hits.length)));
+    cnt.appendChild(el("div","eyebrow", retro? retro+" retrospective" : "matching changes"));
+    n.appendChild(cnt);
+    const acts = el("div",null); acts.style.display="flex"; acts.style.gap="6px";
+    const b1 = el("button","btn sm","Open"); b1.onclick=()=>{ applyFilters(f); go("search"); };
+    const b2 = el("button","btn sm","Delete"); b2.onclick=async()=>{ S.watches=S.watches.filter(x=>x.id!==w.id); await saveWatches(); renderWatches(); };
+    acts.append(b1,b2); n.appendChild(acts);
+    box.appendChild(n);
+  }
+  $("#t-watch").classList.toggle("hot", anyHot);
+}
+
+function renderOverview(){
+  const box = $("#overview"); box.innerHTML="";
+  if(!S.corpus.length){ box.appendChild(emptyState("Nothing to summarise","Import a snapshot first.",null)); return; }
+  const agg = (keyfn) => { const m=new Map();
+    for(const r of S.corpus){ const k=keyfn(r); if(!k) continue; const e=m.get(k)||{n:0,v:0}; e.n++; e.v+=r.val||0; m.set(k,e); }
+    return [...m.entries()].sort((a,b)=>b[1].v-a[1].v); };
+  box.appendChild(barPanel("Committed value by jurisdiction", agg(r=>r.jur).slice(0,10)));
+  box.appendChild(barPanel("Top buyers", agg(r=>r.buyer).slice(0,8)));
+  box.appendChild(barPanel("Top suppliers", agg(r=>r.snorm ? r.supplier : null).slice(0,8)));
+  const fm = new Map();
+  for(const r of S.corpus){ for(const f of (r.flags||"").split(",").filter(Boolean)){ const e=fm.get(f)||{n:0,v:0}; e.n++; e.v+=r.val||0; fm.set(f,e);} if(r.conf){ const e=fm.get("confidential")||{n:0,v:0}; e.n++; e.v+=r.val||0; fm.set("confidential",e);} }
+  box.appendChild(barPanel("Integrity flags", [...fm.entries()].sort((a,b)=>b[1].n-a[1].n).map(([k,v])=>[FLAGS[k]||k,v]), true, "n"));
+}
+function barPanel(title, rows, warn, mode){
+  const p = el("div","pnl"); p.appendChild(el("h4","eyebrow",title));
+  const max = Math.max(...rows.map(r=> mode==="n" ? r[1].n : r[1].v), 1);
+  for(const [k,v] of rows){
+    const b = el("div","bar"+(warn?" warn":""));
+    const lb = el("div","lbl");
+    lb.appendChild(el("span",null,k));
+    lb.appendChild(el("span",null, mode==="n" ? v.n.toLocaleString()+" notices" : shortMoney(v.v)+" · "+v.n));
+    b.appendChild(lb);
+    const tr = el("div","track"); const fl = el("div","fill");
+    fl.style.width = Math.max(2, ((mode==="n"?v.n:v.v)/max)*100) + "%";
+    tr.appendChild(fl); b.appendChild(tr); p.appendChild(b);
+  }
+  return p;
+}
+
+function renderData(){
+  const m = S.meta;
+  $("#datastat").innerHTML = S.corpus.length ? `
+    records held &nbsp;<b>${S.corpus.length.toLocaleString()}</b><br>
+    snapshot captured &nbsp;<b>${esc(m.captured_at||"—")}</b><br>
+    imported &nbsp;<b>${esc((m.imported_at||"").slice(0,16).replace("T"," "))}</b><br>
+    imports so far &nbsp;<b>${m.imports||1}</b><br>
+    change events &nbsp;<b>${S.changes.length.toLocaleString()}</b><br>
+    retrospective edits &nbsp;<b>${S.changes.filter(e=>e.retro).length}</b><br>
+    watches &nbsp;<b>${S.watches.length}</b>` : "Nothing held yet.";
+  $("#storenote").innerHTML = hasStore
+    ? "Data is held in this artifact's storage and persists between sessions. Roughly 40,000 notices fit comfortably — export a filtered slice rather than the whole AusTender corpus."
+    : "<b>Storage unavailable.</b> Running in memory only, so anything you import is lost when this page closes.";
+  $("#storenote").className = "note" + (hasStore ? "" : " warn");
+}
+
+/* ============================ drawer ============================ */
+function openDrawer(id){
+  const r = S.byId.get(id);
+  const hist = S.changes.filter(e=>e.id===id);
+  const host = $("#drawer-host"); host.innerHTML="";
+  const scrim = el("div","scrim"); scrim.onclick=closeDrawer; host.appendChild(scrim);
+  const d = el("div","drawer"); d.setAttribute("role","dialog"); d.setAttribute("aria-modal","true");
+  const head = el("div","dhead");
+  const top = el("div"); top.style.display="flex"; top.style.justifyContent="space-between"; top.style.gap="12px";
+  top.appendChild(el("span","eyebrow", (r?r.jur:"—") + " · contract notice"));
+  const x = el("button","btn sm","Close"); x.onclick=closeDrawer; top.appendChild(x);
+  head.appendChild(top);
+  head.appendChild(el("h2",null, r ? (r.title||"(untitled notice)") : "Withdrawn notice"));
+  const hb = el("div","badges");
+  for(const f of ((r&&r.flags)||"").split(",").filter(Boolean)) hb.appendChild(el("span","bdg amber",FLAGS[f]||f));
+  head.appendChild(hb);
+  d.appendChild(head);
+
+  const body = el("div","dbody");
+  if(!r){
+    body.appendChild(el("div","retro-note","This notice was present in an earlier snapshot and is absent from the current one. Removal is not itself evidence of anything, but it is not a normal lifecycle event for a published contract notice."));
+  }
+  const retroCount = hist.filter(e=>e.retro).length;
+  if(retroCount){
+    const n = el("div","retro-note");
+    n.innerHTML = `<b>Edited after the reporting window.</b> ${retroCount} change${retroCount>1?"s":""} to this notice ${retroCount>1?"were":"was"} made more than 42 days after publication. AusTender carries no public revision history, so this trace is the only record of it.`;
+    body.appendChild(n);
+  }
+  if(r){
+    const kv = el("dl","kv");
+    const pairs = [["CN ID",r.cn],["OCID",r.ocid],["Buyer",r.buyer+(r.branch?" — "+r.branch:"")],
+      ["Supplier",r.supplier],["Supplier ABN",r.abn],["Value",money(r.val)],
+      ["Original value", r.val0!=null?money(r.val0):null],["Method",r.method],["Category",r.cat],
+      ["Published",r.pub],["Signed",r.sign],["Term", r.start||r.end ? (r.start||"?")+" → "+(r.end||"?") : null],
+      ["Confidential", r.conf ? "yes" : "no"]];
+    for(const [k,v] of pairs){ if(v==null||v==="") continue;
+      kv.appendChild(el("dt",null,k)); kv.appendChild(el("dd",null,String(v))); }
+    body.appendChild(kv);
+    if(r.desc){ const s=el("div","dsec"); s.appendChild(el("h4","eyebrow","Description"));
+      s.appendChild(el("p",null,r.desc)); body.appendChild(s); }
+    if(r.url){ const a=el("a",null,"Open source record"); a.href=r.url; a.target="_blank"; a.rel="noopener";
+      a.className="mono"; body.appendChild(a); }
+  }
+
+  const s = el("div","dsec"); s.style.marginTop="22px";
+  s.appendChild(el("h4","eyebrow","Mutation trace"));
+  if(!hist.length){
+    s.appendChild(el("p",null,"Unchanged across every snapshot held."));
+  } else {
+    const tr = el("div","trace");
+    for(const e of hist){
+      const k = e.retro ? "retro" : e.t;
+      const nd = el("div","tnode "+k);
+      const w = el("div","when");
+      w.appendChild(el("span",null,e.ts));
+      w.appendChild(el("span","bdg "+({new:"jade",value:"violet",retro:"amber",gone:"claret",amended:"ultra"}[k]||""), EVT[k]));
+      nd.appendChild(w);
+      if(!e.ch || !e.ch.length){
+        nd.appendChild(el("div","delta", e.t==="new" ? "First appeared in this snapshot." : "Absent from this snapshot."));
+      } else {
+        for(const c of e.ch){
+          const dd = el("div","delta");
+          const fmt = v => v==null||v==="" ? "—" : (c.f==="val" ? money(Number(v)) : String(v));
+          dd.innerHTML = `<span class="f">${esc(FIELD_LABEL[c.f]||c.f)}</span><s>${esc(fmt(c.from))}</s> → <i>${esc(fmt(c.to))}</i>`;
+          nd.appendChild(dd);
+        }
+      }
+      tr.appendChild(nd);
+    }
+    s.appendChild(tr);
+  }
+  body.appendChild(s);
+  d.appendChild(body); host.appendChild(d);
+  d.querySelector("button").focus();
+  document.addEventListener("keydown", escClose);
+}
+function escClose(e){ if(e.key==="Escape") closeDrawer(); }
+function closeDrawer(){ $("#drawer-host").innerHTML=""; document.removeEventListener("keydown", escClose); }
+
+/* ============================ filters UI ============================ */
+function chipset(host, items, set, cls){
+  host.innerHTML="";
+  for(const [val,label] of items){
+    const b = el("button","chip"+(cls?" "+cls:""),label);
+    b.setAttribute("aria-pressed", set.has(val));
+    b.onclick=()=>{ set.has(val)?set.delete(val):set.add(val); b.setAttribute("aria-pressed",set.has(val)); S.page=1; renderSearch(); };
+    host.appendChild(b);
+  }
+}
+function buildFilters(){
+  chipset($("#f-jur"), JURS.map(j=>[j,j]), F.jur);
+  chipset($("#f-method"), METHODS.map(m=>[m,m.replace(" tender","").replace("/standing offer","")]), F.method);
+  chipset($("#f-flags"), Object.entries(FLAGS), F.flags, "flag");
+  chipset($("#f-evt"), Object.entries(EVT), S.evtFilter);
+  $("#f-evt").querySelectorAll(".chip").forEach(c=>c.addEventListener("click",()=>setTimeout(renderChanges,0)));
+}
+function clearFilters(){
+  F.q=""; F.jur.clear(); F.method.clear(); F.flags.clear(); F.min=F.max=null; F.from=F.to=""; F.sort="rel";
+  $("#q").value=""; $("#f-min").value=""; $("#f-max").value=""; $("#f-from").value=""; $("#f-to").value=""; $("#sort").value="rel";
+  buildFilters(); S.page=1; renderSearch();
+}
+function applyFilters(f){
+  F.q=f.q; F.jur=new Set(f.jur); F.method=new Set(f.method); F.flags=new Set(f.flags);
+  F.min=f.min; F.max=f.max; F.from=f.from; F.to=f.to; F.sort=f.sort||"rel";
+  $("#q").value=F.q; $("#f-min").value=F.min??""; $("#f-max").value=F.max??"";
+  $("#f-from").value=F.from||""; $("#f-to").value=F.to||""; $("#sort").value=F.sort;
+  buildFilters(); S.page=1; renderSearch();
+}
+const serialise = f => ({ q:f.q, jur:[...f.jur], method:[...f.method], flags:[...f.flags],
+  min:f.min, max:f.max, from:f.from, to:f.to, sort:f.sort });
+const rehydrate = o => ({ q:o.q||"", jur:new Set(o.jur||[]), method:new Set(o.method||[]),
+  flags:new Set(o.flags||[]), min:o.min??null, max:o.max??null, from:o.from||"", to:o.to||"", sort:o.sort||"rel" });
+function describe(f){
+  const p=[];
+  if(f.q) p.push(`"${f.q}"`);
+  if(f.jur.size) p.push([...f.jur].join("/"));
+  if(f.method.size) p.push([...f.method].join(", "));
+  if(f.flags.size) p.push([...f.flags].map(x=>FLAGS[x]||x).join(", "));
+  if(f.min!=null) p.push("≥"+shortMoney(f.min));
+  if(f.max!=null) p.push("≤"+shortMoney(f.max));
+  if(f.from||f.to) p.push((f.from||"…")+" to "+(f.to||"…"));
+  return p.join(" · ") || "everything";
+}
+
+/* ============================ views ============================ */
+function go(v){
+  S.view=v;
+  document.querySelectorAll(".tab").forEach(t=>t.setAttribute("aria-selected", t.dataset.view===v));
+  for(const k of ["search","changes","watch","overview","data"]) $("#v-"+k).classList.toggle("hidden", k!==v);
+  $("#rail").style.display = (v==="search") ? "" : (window.innerWidth>860 ? "" : "none");
+  if(v==="changes") renderChanges();
+  if(v==="watch") renderWatches();
+  if(v==="overview") renderOverview();
+  if(v==="data") renderData();
+}
+function refreshHeader(){
+  $("#s-count").textContent = S.corpus.length ? S.corpus.length.toLocaleString() : "—";
+  $("#s-when").textContent = S.meta.captured_at || "none";
+  const r = S.changes.filter(e=>e.retro).length;
+  $("#s-chg").textContent = S.changes.length ? S.changes.length.toLocaleString()+(r?" ("+r+" retro)":"") : "—";
+  $("#t-changes").textContent = S.changes.length.toLocaleString();
+  $("#t-watch").textContent = S.watches.length;
+}
+function renderAll(){ refreshHeader(); renderSearch(); if(S.view!=="search") go(S.view); }
+
+/* ============================ demo data ============================ */
+const AGENCIES = ["Department of Defence","Services Australia","Department of Home Affairs","Australian Taxation Office",
+  "Department of Health and Aged Care","Department of Finance","National Disability Insurance Agency","Australian Federal Police",
+  "Department of Foreign Affairs and Trade","Bureau of Meteorology","Transport for NSW","Victorian Department of Transport",
+  "Queensland Health","SA Water","City of Melbourne","Department of Veterans' Affairs","Digital Transformation Agency"];
+const SUPPLIERS = ["Northbourne Consulting Partners","Meridian Systems Integration Pty Ltd","Coolibah Logistics Pty Ltd",
+  "Corvus Advisory Group Pty Ltd","Barton Technology Services","Kestrel Data Solutions Pty Ltd","Yarra Professional Services",
+  "Pindari Engineering Pty Ltd","Southern Cross Infrastructure","Blackwattle Analytics","Torrens Facility Management",
+  "Arafura Communications Pty Ltd","Wollemi Defence Industries","Granite Bay Health Services","Redgum Workforce Solutions"];
+const CATS = ["Management advisory services","Software maintenance and support","Temporary personnel services",
+  "Engineering and research","Building construction and maintenance","Aircraft components","Legal services",
+  "Medical equipment","Surveillance and detection equipment","Freight and haulage","Training services","Cleaning services"];
+const WORK = ["capability review","platform sustainment","program assurance","panel engagement","systems integration",
+  "workforce augmentation","facilities upgrade","data migration","independent evaluation","managed services"];
+
+function rnd(a){ return a[Math.floor(Math.random()*a.length)]; }
+function dateBack(maxDays, minDays=0){
+  const d = new Date(Date.now() - (minDays + Math.random()*(maxDays-minDays))*864e5);
+  return d.toISOString().slice(0,10);
+}
+function makeDemo(n){
+  const recs=[];
+  for(let i=0;i<n;i++){
+    const jur = Math.random()<0.42 ? "CTH" : rnd(JURS.slice(1));
+    const sup = rnd(SUPPLIERS), buyer = rnd(AGENCIES), cat = rnd(CATS);
+    const method = Math.random()<0.36 ? "Limited tender" : (Math.random()<0.6 ? "Open tender" : rnd(METHODS));
+    const pub = dateBack(1500, 3);
+    const sign = new Date(new Date(pub) - Math.floor(Math.random()*60)*864e5).toISOString().slice(0,10);
+    const start = new Date(new Date(sign).getTime() + (Math.random()<0.12 ? -Math.random()*90 : Math.random()*30)*864e5).toISOString().slice(0,10);
+    const years = Math.random()<0.15 ? 5+Math.floor(Math.random()*4) : 1+Math.floor(Math.random()*3);
+    const end = new Date(new Date(start).getTime() + years*365*864e5).toISOString().slice(0,10);
+    const base = Math.round((10000 + Math.pow(Math.random(),3)*9_000_000)/100)*100;
+    const grown = Math.random()<0.18;
+    const val = grown ? Math.round(base*(1.5+Math.random()*2.4)/100)*100 : base;
+    const flags=[];
+    const lag = days(sign,pub);
+    if(lag>42) flags.push("late_publish");
+    if(grown) flags.push("value_growth");
+    if(method==="Limited tender") flags.push("limited_tender");
+    if(years>=5) flags.push("long_term");
+    if(days(sign,start)<0) flags.push("backdated");
+    if(Math.abs(base-80000)/80000<0.05 || Math.abs(base-10000)/10000<0.05) flags.push("threshold_hugging");
+    recs.push({ id:jur+":CN"+(5200000+i), jur, cn:"CN"+(5200000+i), ocid:"ocds-demo-"+(5200000+i),
+      title:cat.toLowerCase()+" — "+rnd(WORK), desc:`${buyer} engaged ${sup} for ${cat.toLowerCase()}. Delivered under a ${method.toLowerCase()} process.`,
+      buyer, branch:rnd(["Corporate","Program Delivery","ICT Division","Procurement Branch"]), supplier:sup,
+      abn:String(Math.floor(1e10+Math.random()*8.9e10)), val, val0: grown?base:null,
+      pub, sign, start, end, method, cat, conf: Math.random()<0.06?1:0,
+      url:"https://www.tenders.gov.au/", flags });
+  }
+  return recs;
+}
+async function loadDemo(){
+  const recs = makeDemo(1400);
+  await store.del("pl:changes"); S.changes=[];
+  S.corpus=[]; S.byId=new Map(); S.meta={};
+  const r = await importBundle({ captured_at: dateBack(9,7), source:"demo", records:recs });
+  renderAll(); go("search");
+  toast(`Loaded ${r.added.toLocaleString()} demo notices. This is the baseline — run a simulated refresh to see the diff engine work.`);
+}
+async function simulateRefresh(){
+  if(!S.corpus.length){ return loadDemo(); }
+  const next = S.corpus.map(r=>({...r, flags:(r.flags||"").split(",").filter(Boolean)}));
+  let touched=0;
+  for(const r of next){
+    const roll = Math.random();
+    if(roll<0.035){ const old=r.val; r.val=Math.round(r.val*(1.2+Math.random()*1.6)/100)*100;
+      if(r.val0==null) r.val0=old; if(!r.flags.includes("value_growth")) r.flags.push("value_growth"); touched++; }
+    else if(roll<0.055){ r.end = new Date(new Date(r.end).getTime()+ (180+Math.random()*550)*864e5).toISOString().slice(0,10); touched++; }
+    else if(roll<0.063){ r.conf = r.conf?0:1; touched++; }
+    else if(roll<0.069){ r.method = r.method==="Limited tender" ? "Open tender" : "Limited tender"; touched++; }
+  }
+  const fresh = makeDemo(70).map(r=>({...r, pub:dateBack(6,0), cn:"CN"+(5400000+Math.floor(Math.random()*9e5))}));
+  fresh.forEach(r=>{ r.id = r.jur+":"+r.cn; });
+  const survivors = next.filter(()=>Math.random()>0.004);
+  await importBundle({ captured_at: todayISO(), source:"demo-refresh",
+    records:[...survivors, ...fresh].map(r=>({...r, flags:Array.isArray(r.flags)?r.flags.join(","):r.flags})) });
+  renderAll(); go("changes");
+  toast(`Refresh diffed: ${S.meta.last_events} change events, ${S.changes.filter(e=>e.retro).length} of them retrospective.`);
+}
+
+/* ============================ misc ============================ */
+let toastTimer;
+function toast(msg){
+  let t = $("#toast");
+  if(!t){ t = el("div",null); t.id="toast";
+    t.style.cssText="position:fixed;left:50%;transform:translateX(-50%);bottom:22px;background:#16202B;color:#fff;padding:11px 17px;border-radius:3px;font-size:13px;z-index:60;max-width:88vw;box-shadow:0 8px 26px rgba(22,32,43,.28)";
+    document.body.appendChild(t); }
+  t.textContent=msg; t.style.display="block";
+  clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.style.display="none",5200);
+}
+function exportCSV(){
+  const res = runSearch();
+  if(!res.length) return toast("Nothing to export.");
+  const cols = ["id","jur","cn","ocid","title","buyer","branch","supplier","abn","val","val0","pub","sign","start","end","method","cat","conf","flags","url"];
+  const q = v => v==null ? "" : /[",\n]/.test(String(v)) ? '"'+String(v).replace(/"/g,'""')+'"' : String(v);
+  const csv = [cols.join(",")].concat(res.map(r=>cols.map(c=>q(r[c])).join(","))).join("\n");
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([csv],{type:"text/csv"}));
+  a.download = "proclens-"+todayISO()+".csv"; a.click();
+  toast(`Exported ${res.length.toLocaleString()} rows.`);
+}
+
+/* ============================ wiring ============================ */
+document.querySelectorAll(".tab").forEach(t=>t.onclick=()=>go(t.dataset.view));
+$("#q").addEventListener("input", e=>{ F.q=e.target.value.trim(); S.page=1; renderSearch(); });
+$("#f-min").addEventListener("input", e=>{ F.min = e.target.value? Number(e.target.value.replace(/[^0-9.]/g,"")) : null; S.page=1; renderSearch(); });
+$("#f-max").addEventListener("input", e=>{ F.max = e.target.value? Number(e.target.value.replace(/[^0-9.]/g,"")) : null; S.page=1; renderSearch(); });
+$("#f-from").addEventListener("change", e=>{ F.from=e.target.value; S.page=1; renderSearch(); });
+$("#f-to").addEventListener("change", e=>{ F.to=e.target.value; S.page=1; renderSearch(); });
+$("#sort").addEventListener("change", e=>{ F.sort=e.target.value; S.page=1; renderSearch(); });
+$("#btn-clear").onclick = clearFilters;
+$("#btn-more").onclick = ()=>{ S.page++; renderSearch(); };
+$("#btn-csv").onclick = exportCSV;
+$("#btn-import").onclick = ()=>go("data");
+$("#btn-demo").onclick = loadDemo;
+$("#btn-refresh").onclick = simulateRefresh;
+$("#btn-watch").onclick = async ()=>{
+  const name = prompt("Name this watch", describe(F).slice(0,60));
+  if(!name) return;
+  S.watches.push({ id:"w"+Date.now(), name, f:serialise(F) });
+  await saveWatches(); refreshHeader(); toast("Watch saved. It runs on every import.");
+};
+$("#btn-wipe").onclick = async ()=>{
+  if(!confirm("Erase all held records, change history and watches? This cannot be undone.")) return;
+  for(let i=0;i<(S.meta.chunks||0);i++) await store.del("pl:corpus:"+i);
+  await store.del("pl:meta"); await store.del("pl:changes"); await store.del("pl:watches");
+  S.corpus=[]; S.byId=new Map(); S.changes=[]; S.watches=[]; S.meta={};
+  renderAll(); renderData(); toast("Erased.");
+};
+$("#file").addEventListener("change", async e=>{
+  const f = e.target.files[0]; if(!f) return;
+  try{
+    const r = await importBundle(JSON.parse(await f.text()));
+    renderAll(); renderData();
+    toast(r.first ? `Baseline set: ${r.added.toLocaleString()} notices. Import the next snapshot to see changes.`
+                  : `Imported ${r.added.toLocaleString()} notices · ${r.events.toLocaleString()} changes detected.`);
+    if(!r.first) go("changes");
+  }catch(err){ toast("Import failed: "+err.message); }
+});
+$("#btn-paste").onclick = async ()=>{
+  try{
+    const r = await importBundle(JSON.parse($("#paste").value));
+    renderAll(); renderData(); toast(`Imported ${r.added.toLocaleString()} notices · ${r.events.toLocaleString()} changes.`);
+  }catch(err){ toast("Import failed: "+err.message); }
+};
+
+buildFilters();
+loadAll().then(()=>{ renderAll(); renderData(); });
+</script>
