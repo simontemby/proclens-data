@@ -343,6 +343,7 @@ footer{border-top:1px solid var(--line);margin-top:32px;padding:20px 0 44px;colo
     </div>
     <div id="mores" style="text-align:center;padding:16px"></div>
   </section>
+
 </main>
 
 <dialog id="dlg" aria-labelledby="dlg-t">
@@ -478,6 +479,7 @@ async function ensureMonths(months){
 }
 function rebuild(){
   const months=monthsFor(S.d1,S.d2);
+  const byCn=new Map();
   S.rows=[];
   for(const m of months){
     const rs=S.shards.get(m); if(!rs) continue;
@@ -491,9 +493,36 @@ function rebuild(){
         r._g=(r.value&&r.value_first&&r.value_first>0)?(r.value/r.value_first-1):0;
         r._p=1;
       }
-      S.rows.push(r);
+      r.src="austender";
+      byCn.set(r.cn,r);
     }
   }
+  // Merge, do not append. A CN present in both sources is one contract: the
+  // AusTender record enriched with the confidentiality and dated value history
+  // only the Senate Order snapshots carry.
+  for(const o of (S.sen||[])){
+    const ex=byCn.get(o.cn);
+    if(ex){
+      ex.src="both";
+      ex.conf_contract=o.conf_contract; ex.conf_reason=o.conf_reason;
+      ex.conf_outputs=o.conf_outputs; ex.conf_out_reason=o.conf_out_reason;
+      ex.observations=o.observations; ex.periods=o.periods;
+      if(ex.value_first==null) ex.value_first=o.value_first;
+      ex._h=undefined;
+    }else{
+      byCn.set(o.cn,{
+        cn:o.cn, title:o.title, buyer:o.agency, supplier:o.supplier, abn:o.abn,
+        value:o.value, value_first:o.value_first, cur:"AUD",
+        pub:o.pub, start:o.start, end:o.end, cat:o.cat, method:"",
+        conf_contract:o.conf_contract, conf_reason:o.conf_reason,
+        conf_outputs:o.conf_outputs, conf_out_reason:o.conf_out_reason,
+        observations:o.observations, periods:o.periods,
+        agency_ref:o.agency_ref, flags:"", src:"senate",
+        _f:[], _g:(o.value&&o.value_first&&o.value_first>0)?(o.value/o.value_first-1):0, _p:1
+      });
+    }
+  }
+  S.rows=[...byCn.values()];
   buildAgencies(); apply();
 }
 
@@ -541,6 +570,7 @@ async function boot(){
     S.d1=""; S.d2=""; $("#d1").value=""; $("#d2").value="";
   }
   await ensureMonths(monthsFor(S.d1,S.d2));
+  loadSenate();   // background: merges into the same corpus when it arrives
   if(emb?.suppliers){ S.sup=emb.suppliers; } else { loadSuppliers(); }
 }
 
@@ -620,10 +650,37 @@ function wire(){
 }
 function switchTab(t){
   S.tab=t;
-  $("#tab-c").setAttribute("aria-selected",String(t==="c"));
-  $("#tab-s").setAttribute("aria-selected",String(t==="s"));
-  $("#pane-c").hidden=t!=="c"; $("#pane-s").hidden=t!=="s";
+  for(const k of ["c","s"]){
+    $("#tab-"+k).setAttribute("aria-selected",String(t===k));
+    $("#pane-"+k).hidden=t!==k;
+  }
   t==="s"?applySup():apply();
+}
+
+/* Senate Order records are the same kind of thing — a Commonwealth contract —
+   so they belong in the same corpus and the same search box. They are merged on
+   CN ID rather than appended: 1,115 contracts appear in both sources and would
+   otherwise be counted twice. Loaded in the background after first paint, since
+   the file is 15 MB and nothing should wait on it. */
+async function loadSenate(){
+  if(S.sen) return;
+  try{
+    const r=await fetch(DATA+"senate/contracts.json",{cache:"no-cache"});
+    if(!r.ok){ S.sen=[]; return; }
+    const b=await r.json(), f=b.fields||[], d=b.dict||{}, plist=d._periods||[];
+    S.sen=(b.rows||[]).map(row=>{
+      const o={};
+      for(let i=0;i<f.length;i++){
+        const k=f[i]; let v=row[i];
+        if(d[k]!==undefined&&k!=="_periods"&&typeof v==="number") v=d[k][v];
+        o[k]=v;
+      }
+      o.periods=(o.periods||[]).map(i=>typeof i==="number"?plist[i]:i);
+      o.observations=(o.observations||[]).map(x=>[typeof x[0]==="number"?plist[x[0]]:x[0],x[1]]);
+      return o;
+    });
+  }catch(e){ S.sen=[]; }
+  rebuild();
 }
 
 function apply(){
@@ -666,7 +723,28 @@ function draw(){
   const max=Math.max(...S.view.slice(0,400).map(r=>r.value||0),1);
   const part=S.view.slice(S.page*S.PER,(S.page+1)*S.PER);
   if(!part.length&&S.page===0){
-    $("#tb").innerHTML='<tr><td colspan="8" class="empty">No contracts match these filters.</td></tr>';
+    // A search usually misses because the date range is narrow, not because
+    // nothing exists. Say how many matches sit outside it.
+    let extra="";
+    if(S.q){
+      const wider=S.rows.filter(r=>{
+        if(r._h===undefined)
+          r._h=((r.title||"")+" "+(r.supplier||"")+" "+(r.buyer||"")+" "+
+                (r.cn||"")+" "+(r.abn||"")).toLowerCase();
+        return r._h.includes(S.q);
+      }).length;
+      if(wider>0) extra='<div style="margin-top:12px"><b>'+wider.toLocaleString()+
+        '</b> match'+(wider===1?"":"es")+' outside the current date range.'+
+        '<div style="margin-top:10px"><button class="btn-p" id="widen">Search the whole archive</button></div></div>';
+      else if(!S.sen) extra='<div class="t-sub" style="margin-top:10px">Still loading the '+
+        'Senate Order archive — results may fill in shortly.</div>';
+    }
+    $("#tb").innerHTML='<tr><td colspan="8" class="empty">No contracts match these filters.'+extra+'</td></tr>';
+    const w=$("#widen");
+    if(w) w.onclick=()=>{
+      S.d1=""; S.d2=""; $("#d1").value=""; $("#d2").value="";
+      ensureMonths(monthsFor("",""));
+    };
     $("#more").innerHTML=""; return;
   }
   const lg=v=>v>0?Math.min(100,Math.log10(v+1)/Math.log10(max+1)*100):0;
@@ -683,7 +761,10 @@ function draw(){
     <td class="num" data-th="Published">${esc(fmtMY(r.pub))}</td>
     <td class="hide-m num" data-th="Start">${esc(fmtMY(r.start))}</td>
     <td class="hide-m num" data-th="End">${esc(fmtMY(r.end))}</td>
-    <td data-th="Flags">${r._f.map(f=>`<span class="flag" title="${esc(FLAGS[f]||f)}">${esc(f.replace(/_/g," "))}</span>`).join("")}</td>
+    <td data-th="Flags">${r._f.map(f=>`<span class="flag" title="${esc(FLAGS[f]||f)}">${esc(f.replace(/_/g," "))}</span>`).join("")}${
+      r.src==="senate"?'<span class="flag" title="From a Senate Order snapshot — $100,000 and above, outside the AusTender API window">senate order</span>':""}${
+      String(r.conf_contract||"").toUpperCase().startsWith("Y")?'<span class="flag" title="Contract contains confidentiality provisions">confidential</span>':""}${
+      (r.observations||[]).length>1?'<span class="flag" title="Reported value changed between reporting periods">value moved</span>':""}</td>
   </tr>`;}).join(""));
   const left=S.view.length-(S.page+1)*S.PER;
   $("#more").innerHTML=left>0
@@ -742,10 +823,21 @@ document.addEventListener("click",e=>{
     ["Published",fmtDMY(r.pub)],["Signed",fmtDMY(r.signed)],
     ["Start",fmtDMY(r.start)],["End",fmtDMY(r.end)],
     ["Procurement method",r.method],["UNSPSC category",r.cat],
-    ["First seen by archive",fmtDMY(r.first_seen)],["Last seen",fmtDMY(r.last_seen)]];
+    ["First seen by archive",fmtDMY(r.first_seen)],["Last seen",fmtDMY(r.last_seen)],
+    ["Confidentiality — contract",r.conf_contract],["Reason",r.conf_reason],
+    ["Confidentiality — outputs",r.conf_outputs],["Reason (outputs)",r.conf_out_reason],
+    ["Reporting periods",(r.periods||[]).join(", ")],
+    ["Also in",r.src==="both"?"AusTender API and Senate Order snapshots"
+      :r.src==="senate"?"Senate Order snapshots only":null]];
   let h=rows.filter(([,v])=>v!=null&&v!=="").map(([k,v])=>`<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("");
   if(r._f.length) h+="<dt>Flags</dt><dd>"+r._f.map(f=>
     `<div><b>${esc(f.replace(/_/g," "))}</b> — ${esc(FLAGS[f]||"")}</div>`).join("")+"</dd>";
+  // The dated value trail exists only in the Senate Order snapshots.
+  if((r.observations||[]).length>1)
+    h+="<dt>Value history</dt><dd>"+r.observations.map(o=>
+      `<div>${esc(o[0])} — <b>${money(o[1])}</b></div>`).join("")+
+      '<div class="t-sub" style="margin-top:6px">What the contract was reported as '+
+      'worth in each period\'s snapshot.</div></dd>';
   h+=`<dt>Source</dt><dd><a href="${esc(cnUrl(r.cn))}" target="_blank" rel="noopener">View on AusTender</a></dd>`;
   $("#dlg-b").innerHTML=h; $("#dlg").showModal();
 });

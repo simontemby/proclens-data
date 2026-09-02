@@ -173,11 +173,8 @@ def parse(blob):
 
 
 def load_store(path):
-    b = read_json(path, {})
-    fields = b.get("fields", FIELDS)
     store = {}
-    for row in b.get("rows", []):
-        r = dict(zip(fields, row))
+    for r in decode(read_json(path, {})):
         if r.get("cn"):
             store[r["cn"]] = r
     return store
@@ -238,6 +235,70 @@ def merge(store, rows, period, today):
         elif moved:
             updated += 1
     return added, updated, repeats
+
+
+# The same dictionary trick the contract shards use. agency, cat and supplier
+# were a quarter of this file on their own; periods repeat one of four strings
+# 71,578 times.
+DICT_FIELDS = ("agency", "supplier", "cat", "conf_contract", "conf_reason",
+               "conf_outputs", "conf_out_reason")
+
+
+def encode(rows):
+    dicts, lookup = {}, {}
+    for f in DICT_FIELDS:
+        vals, seen = [], {}
+        for r in rows:
+            v = r.get(f)
+            if v not in seen:
+                seen[v] = len(vals)
+                vals.append(v)
+        dicts[f], lookup[f] = vals, seen
+    # periods is a list per row; intern the period labels too.
+    plist, pseen = [], {}
+    for r in rows:
+        for p in r.get("periods") or []:
+            if p not in pseen:
+                pseen[p] = len(plist)
+                plist.append(p)
+    dicts["_periods"] = plist
+    out = []
+    for r in rows:
+        row = []
+        for f in FIELDS:
+            if f in lookup:
+                row.append(lookup[f][r.get(f)])
+            elif f == "periods":
+                row.append([pseen[p] for p in (r.get("periods") or [])])
+            elif f == "observations":
+                row.append([[pseen[o[0]], o[1]] for o in (r.get("observations") or [])])
+            else:
+                row.append(r.get(f))
+        out.append(row)
+    return dicts, out
+
+
+def decode(b):
+    """Inverse of encode, so load_store reads an encoded file transparently."""
+    fields = b.get("fields", FIELDS)
+    dicts = b.get("dict") or {}
+    plist = dicts.get("_periods") or []
+    out = []
+    for row in b.get("rows", []):
+        r = dict(zip(fields, row))
+        for f, vals in dicts.items():
+            if f == "_periods":
+                continue
+            i = r.get(f)
+            if isinstance(i, int) and 0 <= i < len(vals):
+                r[f] = vals[i]
+        if plist:
+            r["periods"] = [plist[i] if isinstance(i, int) and i < len(plist) else i
+                            for i in (r.get("periods") or [])]
+            r["observations"] = [[plist[o[0]] if isinstance(o[0], int) and o[0] < len(plist)
+                                  else o[0], o[1]] for o in (r.get("observations") or [])]
+        out.append(r)
+    return out
 
 
 def read_json(path, default=None):
@@ -322,10 +383,10 @@ def main():
               file=sys.stderr)
 
     rows_out = sorted(store.values(), key=lambda r: r.get("value") or 0, reverse=True)
+    dicts, encoded = encode(rows_out)
     write_json_if_changed(store_path,
                           {"generated": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-                           "fields": FIELDS,
-                           "rows": [[r.get(f) for f in FIELDS] for r in rows_out]})
+                           "fields": FIELDS, "dict": dicts, "rows": encoded})
 
     conf = sum(1 for r in store.values()
                if str(r.get("conf_contract") or "").upper().startswith("Y"))
