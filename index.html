@@ -282,15 +282,25 @@ async function ensureMonths(months){
   const need=months.filter(m=>!S.shards.has(m));
   if(!need.length) return;
   const p=$("#prog"); p.hidden=false; p.max=need.length; p.value=0;
+  const c=$("#count"); const was=c.innerHTML;
   let done=0;
-  for(const m of need){
-    try{
-      const res=await fetch(`${DATA}contracts-${m}.json`,{cache:"force-cache"});
-      S.shards.set(m,res.ok?expand(await res.json()):[]);
-    }catch(e){ S.shards.set(m,[]); }
-    p.value=++done;
+  // Fetch shards concurrently. Serially, widening the range to 2021 meant ~60
+  // round trips one after another, which is why it crawled.
+  const LANES=6;
+  const queue=need.slice();
+  async function lane(){
+    for(;;){
+      const m=queue.shift(); if(!m) return;
+      try{
+        const res=await fetch(`${DATA}contracts-${m}.json`,{cache:"force-cache"});
+        S.shards.set(m,res.ok?expand(await res.json()):[]);
+      }catch(e){ S.shards.set(m,[]); }
+      p.value=++done;
+      c.innerHTML=`Loading ${done} of ${need.length} months…`;
+    }
   }
-  p.hidden=true;
+  await Promise.all(Array.from({length:Math.min(LANES,need.length)},lane));
+  p.hidden=true; c.innerHTML=was;
   rebuild();
 }
 function rebuild(){

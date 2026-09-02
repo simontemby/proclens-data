@@ -1,0 +1,36 @@
+name: Senate Order snapshots
+
+# AusTender keeps only three periods and deletes the rest, so a missed capture
+# is a permanent loss. Reports are published twice yearly; weekly checking is
+# cheap insurance and the content hash makes a repeat run a no-op.
+on:
+  schedule:
+    - cron: "0 21 * * 2"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: archive-write
+  cancel-in-progress: false
+
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: pip install requests openpyxl
+      - run: python senate.py --out data/senate
+      - name: Commit snapshots
+        run: |
+          git config user.name "legal-tender-bot"
+          git config user.email "legal-tender-bot@users.noreply.github.com"
+          git pull --rebase --autostash origin main || true
+          git add data/senate
+          git diff --staged --quiet || git commit -m "Senate Order snapshots $(date -u +%F)"
+          git push
