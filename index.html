@@ -410,6 +410,16 @@ function expand(sh){
 }
 /* Month shards mean a date filter fetches only the months it needs, instead of
    pulling ~100 MB of archive to answer a question about one quarter. */
+/* Shards were immutable when force-cache was chosen, and stopped being so the
+   moment backfill chunks began adding rows to existing months — leaving browsers
+   pinned to a stale copy that no reload would clear. Stamping the URL with the
+   shard's own count and byte size from index.json makes a changed shard a
+   different URL, while an unchanged one still serves straight from cache. */
+function shardUrl(m){
+  const s=(S.idx&&S.idx.shards||[]).find(x=>x.month===m);
+  const v=s?`${s.count}-${s.bytes}`:"0";
+  return `${DATA}contracts-${m}.json?v=${encodeURIComponent(v)}`;
+}
 function monthsFor(d1,d2){
   if(S.embedded) return [...S.shards.keys()];
   return (S.idx.shards||[]).filter(s=>{
@@ -464,7 +474,7 @@ async function ensureMonths(months){
     for(;;){
       const m=queue.shift(); if(!m) return;
       try{
-        const res=await fetch(`${DATA}contracts-${m}.json`,{cache:"force-cache"});
+        const res=await fetch(shardUrl(m),{cache:"force-cache"});
         S.shards.set(m,res.ok?expand(await res.json()):[]);
       }catch(e){ S.shards.set(m,[]); }
       p.value=++done;
