@@ -69,6 +69,21 @@ AGENT_RE = re.compile(
     r"\b(a/c|acting as|on behalf of|as agent|as agen|t/a|t/as|trading as|atf|"
     r"as trustee|the trustee for)\b", re.I)
 
+# Platforms, marketplaces and volume resellers. A contract with one of these
+# names the CHANNEL, not the capability bought through it: software acquired via
+# a cloud marketplace or a reseller agreement leaves no notice naming the actual
+# vendor. Flagging them does not imply anything improper — it marks the records
+# where a question about "who really supplied this" cannot be answered from
+# AusTender alone, and where an FOI for drawdowns and order forms is the next step.
+PLATFORM_RE = re.compile(
+    r"\b(amazon web services|\baws\b|microsoft|azure|google cloud|\bgcp\b|snowflake|"
+    r"databricks|salesforce|servicenow|oracle|\bsap\b|vmware|palantir|"
+    r"data ?#? ?3|datacom|dxc|kyndryl|insight enterprises|softwareone|softwareone|"
+    r"crayon|rhipe|dicker data|ingram micro|synnex|cdw|shi |sos recruitment|"
+    r"telstra purple|kinetic it|atturra|versent|deloitte|accenture|kpmg|"
+    r"pricewaterhousecoopers|\bpwc\b|ernst & young|\bey\b|mckinsey|boston consulting)\b",
+    re.I)
+
 
 # ---------------------------------------------------------------- http
 
@@ -264,6 +279,8 @@ def flag(r):
             pass
     if AGENT_RE.search(r.get("supplier") or ""):
         f.append("agent_or_trustee")
+    if PLATFORM_RE.search(r.get("supplier") or ""):
+        f.append("platform_or_reseller")
     return ",".join(f)
 
 
@@ -538,9 +555,15 @@ def main():
     ap = argparse.ArgumentParser(description="Build the Legal Tender archive.")
     ap.add_argument("--backfill-from", metavar="YYYY-MM-DD",
                     help="deep build from this date using contractPublished")
+    ap.add_argument("--backfill-to", metavar="YYYY-MM-DD",
+                    help="stop the deep build here, so it can run in resumable chunks")
+    ap.add_argument("--resume", action="store_true",
+                    help="continue a chunked backfill from the checkpoint in index.json")
     ap.add_argument("--since-days", type=int,
                     help="top-up the last N days using contractLastModified")
     ap.add_argument("--data-dir", default=DATA_DIR)
+    ap.add_argument("--chunk-days", type=int, default=180,
+                    help="how much one --resume step fetches before saving")
     ap.add_argument("--axis", choices=["contractPublished", "contractLastModified"],
                     help="override the date axis")
     ap.add_argument("--inspect", action="store_true",
@@ -571,8 +594,20 @@ def main():
             print(f"{c:5d}  {k}")
         return
 
-    if args.backfill_from:
+    target = None
+    if args.resume:
+        # The archive is its own checkpoint. A chunked backfill records how far
+        # it reached, so a timeout costs one chunk rather than the whole run.
+        ck = read_json(os.path.join(args.data_dir, "index.json"), {}).get("backfill")
+        if not ck or not ck.get("next"):
+            print("Nothing to resume; backfill is complete.", file=sys.stderr)
+            return
+        since = date.fromisoformat(ck["next"])
+        target = date.fromisoformat(ck["target"]) if ck.get("target") else today
+        axis = "contractPublished"
+    elif args.backfill_from:
         since = date.fromisoformat(args.backfill_from)
+        target = date.fromisoformat(args.backfill_to) if args.backfill_to else today
         axis = args.axis or "contractPublished"
     elif args.since_days:
         since = today - timedelta(days=args.since_days)
@@ -584,11 +619,15 @@ def main():
     store, base = load_store(args.data_dir)
     existing = read_json(os.path.join(args.data_dir, "index.json"), {})
     archive_start = existing.get("archive_start") or today_s
-    print(f"Archive holds {len(store)} contracts. Fetching {since} → {today} "
-          f"on {axis}.", file=sys.stderr)
+    print(f"Archive holds {len(store)} contracts.", file=sys.stderr)
+
+    until = today
+    if target is not None:
+        until = min(target, since + timedelta(days=args.chunk_days)) if args.resume \
+                else min(target, today)
 
     rows, seen_ocids = [], set()
-    for rel in releases(since, today, axis=axis):
+    for rel in releases(since, until, axis=axis):
         r = to_row(rel)
         key = r.get("ocid") or r.get("cn")
         # Within one run the API returns each process once, but guard anyway so
@@ -598,6 +637,7 @@ def main():
         seen_ocids.add(key)
         rows.append(r)
 
+    print(f"Fetched {len(rows)} releases {since} → {until} on {axis}.", file=sys.stderr)
     changes, added, updated = merge(store, rows, today_s)
 
     coverage_from = existing.get("coverage", {}).get("from")
@@ -610,7 +650,8 @@ def main():
         "archive_start": archive_start,
         "coverage": {"from": coverage_from, "to": today_s},
         "last_run": {"axis": axis, "since": since.isoformat(),
-                     "fetched": len(rows), "added": added, "updated": updated},
+                     "until": until.isoformat(), "fetched": len(rows),
+                     "added": added, "updated": updated},
         "caveats": [
             "Values are committed at award, not amounts actually paid.",
             "The AusTender API exposes only current state; contract values before "
@@ -619,6 +660,17 @@ def main():
             "Subcontractors are not published; they require a written request to the agency.",
         ],
     }
+    prev_ck = read_json(os.path.join(args.data_dir, "index.json"), {}).get("backfill") or {}
+    if target is not None:
+        meta["backfill"] = {
+            "start": prev_ck.get("start") or since.isoformat(),
+            "target": target.isoformat(),
+            "next": until.isoformat() if until < target else None,
+            "complete": until >= target,
+        }
+    elif prev_ck:
+        meta["backfill"] = prev_ck
+
     index = save_store(store, base, args.data_dir, changes, meta)
 
     t = index["totals"]

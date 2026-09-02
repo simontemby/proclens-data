@@ -1,0 +1,63 @@
+name: Backfill resume
+
+# Redundancy. The backfill runs in chunks and checkpoints into data/index.json,
+# so this can pick up wherever the last attempt stopped — after a timeout, a
+# cancelled run, or a transient API failure. It exits immediately once the
+# checkpoint says the backfill is complete, so leaving it scheduled costs
+# nothing. It runs on GitHub's infrastructure and is unaffected by anything
+# happening on a developer's machine.
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: archive-write
+  cancel-in-progress: false
+
+jobs:
+  resume:
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Is there anything to resume?
+        id: check
+        run: |
+          if [ ! -f data/index.json ]; then
+            echo "todo=false" >> $GITHUB_OUTPUT; exit 0
+          fi
+          python - <<'PY' >> $GITHUB_OUTPUT
+          import json
+          b = json.load(open("data/index.json")).get("backfill") or {}
+          print("todo=" + ("true" if b.get("next") else "false"))
+          PY
+
+      - uses: actions/setup-python@v6
+        if: steps.check.outputs.todo == 'true'
+        with:
+          python-version: "3.12"
+
+      - run: pip install requests
+        if: steps.check.outputs.todo == 'true'
+
+      # One chunk per run, committed immediately, so progress is never lost.
+      - name: Resume one chunk
+        if: steps.check.outputs.todo == 'true'
+        env:
+          AUSTENDER_TOKEN: ${{ secrets.AUSTENDER_TOKEN }}
+        run: python refresh.py --resume --chunk-days 180
+
+      - name: Commit progress
+        if: steps.check.outputs.todo == 'true'
+        run: |
+          git config user.name "legal-tender-bot"
+          git config user.email "legal-tender-bot@users.noreply.github.com"
+          git pull --rebase --autostash origin main || true
+          git add data
+          git diff --staged --quiet || git commit -m "Backfill chunk $(date -u +%F\ %H:%M)"
+          git push

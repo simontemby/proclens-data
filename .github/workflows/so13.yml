@@ -1,0 +1,35 @@
+name: Senate Order 13 ingest
+
+# Contracts from entities that do not report to AusTender at all — the NDIA
+# being the significant one. Published twice yearly, so monthly is ample.
+on:
+  schedule:
+    - cron: "0 20 1 * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: archive-write
+  cancel-in-progress: false
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: pip install requests openpyxl
+      - run: python so13.py --out data/so13
+      - name: Commit listings
+        run: |
+          git config user.name "legal-tender-bot"
+          git config user.email "legal-tender-bot@users.noreply.github.com"
+          git pull --rebase --autostash origin main || true
+          git add data/so13
+          git diff --staged --quiet || git commit -m "Senate Order 13 refresh $(date -u +%F)"
+          git push
