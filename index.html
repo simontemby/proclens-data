@@ -236,6 +236,17 @@ const $=s=>document.querySelector(s);
 const money=n=>n==null?"—":"$"+Math.round(n).toLocaleString("en-AU");
 const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const cnUrl=cn=>"https://www.tenders.gov.au/Cn/Show/"+encodeURIComponent(cn);
+const MON=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+/* Display only. Stored values remain ISO (YYYY-MM-DD) because sorting and the
+   date filter compare them as strings. */
+function fmtMY(v){                       // Apr-2026
+  const m=/^(\d{4})-(\d{2})/.exec(String(v||""));
+  return m?`${MON[+m[2]-1]}-${m[1]}`:"—";
+}
+function fmtDMY(v){                      // 02-09-2026
+  const m=/^(\d{4})-(\d{2})-(\d{2})/.exec(String(v||""));
+  return m?`${m[3]}-${m[2]}-${m[1]}`:(v?String(v):"—");
+}
 
 /* Shards dictionary-encode their repetitive columns. Decoding assigns the
    SHARED string, so 6,000 rows referencing one agency hold one string between
@@ -367,18 +378,19 @@ async function boot(){
   $("#d1").value=S.d1; $("#d2").value=S.d2;
   $("#d1").min=$("#d2").min=(all[0]||"")+"-01"; $("#d1").max=$("#d2").max=cov.to||"";
 
-  $("#scopenote").innerHTML=`<b>Archive covers ${esc(cov.from||"?")} to ${esc(cov.to||"?")}</b> — `+
+  $("#scopenote").innerHTML=`<b>Archive covers ${esc(fmtDMY(cov.from))} to ${esc(fmtDMY(cov.to))}</b> — `+
     `${(t.contracts||0).toLocaleString()} contracts, ${(t.suppliers_by_abn||0).toLocaleString()} `+
     `suppliers by ABN, ${money(t.value_aud)} committed. Showing the most recent three months; `+
     `widen the date filter to load more.`;
   $("#truthnote").innerHTML=`<b>What this archive can and cannot show.</b> AusTender's API `+
     `publishes only each contract's current state — there is no amendment history. `+
-    `Values before <b>${esc(idx.archive_start||"?")}</b>, when this archive started, are not `+
+    `Values before <b>${esc(fmtDMY(idx.archive_start))}</b>, when this archive started, are not `+
     `recoverable, so "observed growth" means growth seen since then, not a contract's full life. `+
     `Values are committed at award, not amounts paid. Panel and standing-offer relationships, `+
     `and subcontractors, are not published in this feed.`;
-  $("#prov").textContent=`Generated ${String(idx.generated||"").slice(0,19).replace("T"," ")} UTC · `+
-    `archive started ${idx.archive_start||"?"} · ${(idx.shards||[]).length} monthly shards.`;
+  $("#prov").textContent=`Generated ${fmtDMY(idx.generated)} `+
+    `${String(idx.generated||"").slice(11,19)} UTC · `+
+    `archive started ${fmtDMY(idx.archive_start)} · ${(idx.shards||[]).length} monthly shards.`;
 
   buildChips(); wire();
   if(S.embedded){
@@ -505,9 +517,9 @@ function draw(){
     <td class="num">${money(r.value)}${(r.cur||"AUD")!=="AUD"?" "+esc(r.cur):""}
       <div class="rule" title="${grew?"First seen at "+money(r.value_first):""}">
         <i style="width:${lg(r.value)}%"></i>${grew?`<u style="left:${lg(r.value_first)}%"></u>`:""}</div></td>
-    <td class="hide-s num">${esc(r.pub||"—")}</td>
-    <td class="hide-m num">${esc(r.start||"—")}</td>
-    <td class="hide-m num">${esc(r.end||"—")}</td>
+    <td class="hide-s num">${esc(fmtMY(r.pub))}</td>
+    <td class="hide-m num">${esc(fmtMY(r.start))}</td>
+    <td class="hide-m num">${esc(fmtMY(r.end))}</td>
     <td>${r._f.map(f=>`<span class="flag" title="${esc(FLAGS[f]||f)}">${esc(f.replace(/_/g," "))}</span>`).join("")}</td>
   </tr>`;}).join(""));
   const left=S.view.length-(S.page+1)*S.PER;
@@ -564,9 +576,10 @@ document.addEventListener("click",e=>{
     ["Supplier ABN",r.abn],["Value",money(r.value)+((r.cur||"AUD")!=="AUD"?" "+r.cur:"")],
     ["First seen at",r.value_first!=null&&r.value_first!==r.value?money(r.value_first):null],
     ["Amendments observed",r.amendments||null],
-    ["Published",r.pub],["Signed",r.signed],["Start",r.start],["End",r.end],
+    ["Published",fmtDMY(r.pub)],["Signed",fmtDMY(r.signed)],
+    ["Start",fmtDMY(r.start)],["End",fmtDMY(r.end)],
     ["Procurement method",r.method],["UNSPSC category",r.cat],
-    ["First seen by archive",r.first_seen],["Last seen",r.last_seen]];
+    ["First seen by archive",fmtDMY(r.first_seen)],["Last seen",fmtDMY(r.last_seen)]];
   let h=rows.filter(([,v])=>v!=null&&v!=="").map(([k,v])=>`<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("");
   if(r._f.length) h+="<dt>Flags</dt><dd>"+r._f.map(f=>
     `<div><b>${esc(f.replace(/_/g," "))}</b> — ${esc(FLAGS[f]||"")}</div>`).join("")+"</dd>";
