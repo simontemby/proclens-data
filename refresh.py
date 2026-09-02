@@ -658,8 +658,10 @@ def main():
 
     until = today
     if target is not None:
-        until = min(target, since + timedelta(days=args.chunk_days)) if args.resume \
-                else min(target, today)
+        # Chunk every backfill, not just --resume. A single three-hour fetch that
+        # commits only at the end loses everything to one failed push; a chunk
+        # costs at most --chunk-days of refetching.
+        until = min(target, since + timedelta(days=args.chunk_days))
 
     rows, seen_ocids = [], set()
     for rel in releases(since, until, axis=axis):

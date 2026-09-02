@@ -33,21 +33,55 @@ jobs:
       # A backfill walks contractPublished, which reaches back years. The weekly
       # run walks contractLastModified, which only covers roughly two years but
       # is what surfaces amendments to older contracts.
+      # A backfill is committed and pushed after every chunk. The first attempt
+      # fetched for three hours, then lost the lot to a single rejected push
+      # because main had moved on underneath it. Now the most a failure can cost
+      # is one chunk, and progress is visible in the commit log as it happens.
       - name: Build archive
         env:
           AUSTENDER_TOKEN: ${{ secrets.AUSTENDER_TOKEN }}
+          BACKFILL_FROM: ${{ github.event.inputs.backfill_from }}
         run: |
-          if [ -n "${{ github.event.inputs.backfill_from }}" ]; then
-            python refresh.py --backfill-from "${{ github.event.inputs.backfill_from }}"
-          else
-            python refresh.py --since-days 21
-          fi
-
-      - name: Commit archive
-        run: |
+          set -euo pipefail
           git config user.name "legal-tender-bot"
           git config user.email "legal-tender-bot@users.noreply.github.com"
-          git pull --rebase --autostash origin main || true
-          git add data
-          git diff --staged --quiet || git commit -m "Archive refresh $(date -u +%F)"
-          git push
+
+          save () {
+            # Always rebase onto whatever landed while we were fetching, or the
+            # push is rejected and the work is thrown away.
+            git add data
+            if git diff --staged --quiet; then echo "nothing to commit"; return 0; fi
+            git commit -m "$1"
+            for attempt in 1 2 3 4 5; do
+              git pull --rebase --autostash origin main && git push && return 0
+              echo "push attempt $attempt failed; retrying"
+              sleep $((attempt * 15))
+            done
+            echo "could not push after 5 attempts" >&2
+            return 1
+          }
+
+          more_to_do () {
+            python - <<'PY'
+          import json, sys
+          try:
+              b = json.load(open("data/index.json")).get("backfill") or {}
+          except Exception:
+              b = {}
+          sys.exit(0 if b.get("next") else 1)
+          PY
+          }
+
+          if [ -n "${BACKFILL_FROM:-}" ]; then
+            python refresh.py --backfill-from "$BACKFILL_FROM" --chunk-days 180
+            save "Backfill chunk $(date -u +%F\ %H:%M)"
+            for i in $(seq 1 40); do
+              more_to_do || break
+              python refresh.py --resume --chunk-days 180
+              save "Backfill chunk $(date -u +%F\ %H:%M)"
+            done
+            echo "backfill loop finished"
+          else
+            python refresh.py --since-days 21
+            save "Archive refresh $(date -u +%F)"
+          fi

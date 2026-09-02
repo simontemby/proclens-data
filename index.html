@@ -100,15 +100,26 @@ dialog#filterSheet::backdrop{background:rgba(10,12,16,.5)}
 .fsheet-foot{display:none}
 @media(max-width:899px){
   dialog#filterSheet{position:fixed;inset:auto 0 0 0;width:100%;max-width:none;margin:0;
-    max-height:88vh;border-radius:16px 16px 0 0;border-width:1px 0 0 0}
-  dialog#filterSheet[open]{display:flex;flex-direction:column;animation:sheetup .18s ease-out}
-  @keyframes sheetup{from{transform:translateY(12%);opacity:.4}to{transform:translateY(0);opacity:1}}
+    /* dvh, not vh: mobile browser chrome makes vh taller than the visible area,
+       which pushes a bottom-anchored sheet off the screen. */
+    max-height:85vh;max-height:85dvh;
+    border-radius:16px 16px 0 0;border-width:1px 0 0 0}
+  /* Entrance fade only. A translateY animation here left the sheet stranded
+     81px below the viewport with the Apply button unreachable whenever the
+     animation did not run to completion — never move the resting position. */
+  dialog#filterSheet[open]{display:flex;flex-direction:column;animation:sheetin .18s ease-out}
+  @keyframes sheetin{from{opacity:0}to{opacity:1}}
+  @media(prefers-reduced-motion:reduce){dialog#filterSheet[open]{animation:none}}
   .fsheet-head{display:flex;align-items:center;justify-content:space-between;
     padding:14px 16px;border-bottom:1px solid var(--line);flex:none}
   .fsheet-head strong{font-size:16px}
-  .fsheet-body{overflow:auto;flex:1}
+  /* min-height:0 is required or a flex child refuses to shrink below its
+     content, so the body never scrolls and the footer is pushed out. */
+  .fsheet-body{overflow-y:auto;overscroll-behavior:contain;
+    -webkit-overflow-scrolling:touch;flex:1 1 auto;min-height:0}
   .fsheet-foot{display:flex;gap:10px;padding:12px 16px;border-top:1px solid var(--line);
-    flex:none;background:var(--card)}
+    flex:none;background:var(--card);
+    padding-bottom:calc(12px + env(safe-area-inset-bottom,0px))}
   .fsheet-foot .btn-p{flex:1;min-height:46px;font-size:14.5px}
   .fsheet-foot #reset{min-height:46px}
   .grp{width:100%}
