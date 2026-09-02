@@ -29,8 +29,8 @@ PAUSE = 1.0              # polite delay between requests
 TIMEOUT = 60
 RETRIES = 4
 
-FIELDS = ["id","jur","cn","title","buyer","supplier","abn","value","value_orig",
-          "pub","start","end","method","cat","flags","url"]
+FIELDS = ["id","jur","ocid","cn","title","buyer","supplier","abn","value","value_orig",
+          "pub","signed","start","end","method","cat","amendments","flags","url"]
 
 # Commonwealth Procurement Rules reporting window for contract notices.
 PUBLISH_DEADLINE_DAYS = 42
