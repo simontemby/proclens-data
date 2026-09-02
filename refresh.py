@@ -69,6 +69,15 @@ def get(path, params=None):
     raise RuntimeError(f"gave up on {url}")
 
 
+def api_ts(d):
+    """AusTender rejects plain dates.
+
+    Boundaries must be ISO 8601 UTC to the second: YYYY-MM-DDTHH:MM:SSZ.
+    A bare YYYY-MM-DD returns 400 errorCode 102, which is not retryable.
+    """
+    return d.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
 def windows(start, end, days=WINDOW_DAYS):
     cur = start
     while cur < end:
@@ -84,7 +93,7 @@ def releases(since, until):
     amendments and after-the-fact corrections, which published-date misses.
     """
     for a, b in windows(since, until):
-        path = f"/findByDates/contractLastModified/{a.isoformat()}/{b.isoformat()}"
+        path = f"/findByDates/contractLastModified/{api_ts(a)}/{api_ts(b)}"
         page, guard = path, 0
         while page and guard < 400:
             data = get(page)
@@ -125,6 +134,28 @@ def as_money(v):
         return None
 
 
+def party_index(rel):
+    """id -> party. Supplier ABN and buyer name live in parties[], not on the award."""
+    return {p.get("id"): p for p in (rel.get("parties") or []) if isinstance(p, dict)}
+
+
+def abn_of(party):
+    """ABN is an additionalIdentifiers entry with scheme AU-ABN, not identifier.id."""
+    for ident in (party or {}).get("additionalIdentifiers") or []:
+        if str(ident.get("scheme") or "").upper() == "AU-ABN":
+            return str(ident.get("id") or "").replace(" ", "")
+    return ""
+
+
+def buyer_of(rel):
+    """parties[] is unordered and parties[0] is often the supplier, so pick by role."""
+    for p in rel.get("parties") or []:
+        roles = [str(x).lower() for x in (p.get("roles") or [])]
+        if "procuringentity" in roles or "buyer" in roles:
+            return str(p.get("name") or "").strip()
+    return str(dig(rel, "buyer", "name") or "").strip()
+
+
 def to_row(rel):
     """Map one OCDS release to the bundle row order."""
     ocid = rel.get("ocid")
@@ -132,6 +163,8 @@ def to_row(rel):
     contract = dig(rel, "contracts", 0, default={}) or {}
     tender = rel.get("tender") or {}
     supplier = dig(award, "suppliers", 0, default={}) or {}
+    parties = party_index(rel)
+    supplier_party = parties.get(supplier.get("id")) or {}
 
     cn = contract.get("id") or award.get("id") or rel.get("id") or ocid
     value = as_money(dig(contract, "value", "amount")) or as_money(dig(award, "value", "amount"))
@@ -144,10 +177,13 @@ def to_row(rel):
         "jur": "CTH",
         "cn": cn,
         "ocid": ocid,
-        "title": (contract.get("title") or award.get("title") or tender.get("title") or "").strip(),
-        "buyer": (dig(rel, "buyer", "name") or dig(rel, "parties", 0, "name") or "").strip(),
+        # contracts[].title is the agency's internal PO reference ("4600094809");
+        # contracts[].description carries the actual subject. Prefer the subject.
+        "title": (contract.get("description") or contract.get("title")
+                  or award.get("title") or tender.get("title") or "").strip(),
+        "buyer": buyer_of(rel),
         "supplier": (supplier.get("name") or "").strip(),
-        "abn": str(dig(supplier, "identifier", "id") or "").replace(" ", ""),
+        "abn": abn_of(supplier_party),
         "value": value,
         "value_orig": value,
         "pub": as_date(rel.get("date")),
@@ -155,8 +191,10 @@ def to_row(rel):
         "end": as_date(period.get("endDate")),
         "signed": as_date(contract.get("dateSigned")),
         "method": (tender.get("procurementMethodDetails") or tender.get("procurementMethod") or "").strip(),
-        "cat": (dig(rel, "awards", 0, "items", 0, "classification", "description")
-                or tender.get("mainProcurementCategory") or "").strip(),
+        # Items hang off contracts[], not awards[], and the classification carries a
+        # UNSPSC code with no description field.
+        "cat": str(dig(contract, "items", 0, "classification", "id")
+                   or tender.get("mainProcurementCategory") or "").strip(),
         "url": f"https://www.tenders.gov.au/Cn/Show/{cn}",
     }
 
