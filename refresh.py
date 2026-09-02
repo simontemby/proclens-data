@@ -313,9 +313,7 @@ def load_base(datadir):
         except (OSError, json.JSONDecodeError) as e:
             print(f"  ! {name} unreadable ({e}); skipped", file=sys.stderr)
             continue
-        fields = b.get("fields", FIELDS)
-        for row in b.get("rows", []):
-            r = dict(zip(fields, row))
+        for r in decode_shard(b):
             key = r.get("ocid") or r.get("cn")
             if key:
                 base[key] = r
@@ -446,8 +444,7 @@ def save_store(store, base, datadir, changes, meta):
         rows.sort(key=lambda r: r.get("pub") or "", reverse=True)
         name = f"contracts-{month}.json"
         path = os.path.join(datadir, name)
-        payload = {"month": month, "fields": FIELDS,
-                   "rows": [[r.get(f) for f in FIELDS] for r in rows]}
+        payload = encode_shard(month, rows)
         if write_json_if_changed(path, payload):
             rewritten += 1
         total = sum(r["value"] for r in rows
@@ -497,6 +494,44 @@ def save_store(store, base, datadir, changes, meta):
     })
     write_json(os.path.join(datadir, "index.json"), index)
     return index
+
+
+# Fields with few distinct values are stored once in a dictionary and referenced
+# by integer. method has 3 distinct values, buyer ~200, cur 1 — yet each was
+# repeated in full on every row, and together they were a third of the payload.
+DICT_FIELDS = ("buyer", "supplier", "method", "flags", "cat", "cur")
+
+
+def encode_shard(month, rows):
+    dicts, lookup = {}, {}
+    for f in DICT_FIELDS:
+        vals, seen = [], {}
+        for r in rows:
+            v = r.get(f)
+            if v not in seen:
+                seen[v] = len(vals)
+                vals.append(v)
+        dicts[f] = vals
+        lookup[f] = seen
+    out = []
+    for r in rows:
+        out.append([lookup[f][r.get(f)] if f in lookup else r.get(f) for f in FIELDS])
+    return {"month": month, "fields": FIELDS, "dict": dicts, "rows": out}
+
+
+def decode_shard(b):
+    """Inverse of encode_shard, for reading the archive back in."""
+    fields = b.get("fields", FIELDS)
+    dicts = b.get("dict") or {}
+    out = []
+    for row in b.get("rows", []):
+        r = dict(zip(fields, row))
+        for f, vals in dicts.items():
+            i = r.get(f)
+            if isinstance(i, int) and 0 <= i < len(vals):
+                r[f] = vals[i]
+        out.append(r)
+    return out
 
 
 def write_json_if_changed(path, obj):

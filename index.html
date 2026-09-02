@@ -100,6 +100,7 @@ dialog::backdrop{background:rgba(0,0,0,.5)}
 .kv dt{color:var(--muted)} .kv dd{margin:0;word-break:break-word}
 footer{border-top:1px solid var(--line);margin-top:32px;padding:18px 0 40px;color:var(--muted);font-size:13px}
 .empty{padding:44px 16px;text-align:center;color:var(--muted)}
+@media(max-width:1000px){.hide-m{display:none}}
 @media(max-width:700px){.hide-s{display:none} h1{font-size:21px} .t-title{max-width:none}}
 </style>
 </head>
@@ -145,7 +146,9 @@ footer{border-top:1px solid var(--line);margin-top:32px;padding:18px 0 40px;colo
         <option value="pub_asc">Oldest first</option>
         <option value="value">Largest value</option>
         <option value="value_asc">Smallest value</option>
-        <option value="growth">Most observed growth</option>
+        <option value="start">Start date (latest)</option>
+    <option value="end">End date (soonest)</option>
+    <option value="growth">Most observed growth</option>
       </select>
       <button id="reset">Reset filters</button>
     </div>
@@ -169,6 +172,8 @@ footer{border-top:1px solid var(--line);margin-top:32px;padding:18px 0 40px;colo
           <th scope="col">Supplier</th>
           <th scope="col" class="num"><button data-s="value">Value</button></th>
           <th scope="col" class="hide-s num"><button data-s="pub">Published</button></th>
+          <th scope="col" class="hide-m num"><button data-s="start">Start</button></th>
+          <th scope="col" class="hide-m num"><button data-s="end">End</button></th>
           <th scope="col">Flags</th>
         </tr></thead>
         <tbody id="tb"></tbody>
@@ -232,9 +237,21 @@ const money=n=>n==null?"—":"$"+Math.round(n).toLocaleString("en-AU");
 const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const cnUrl=cn=>"https://www.tenders.gov.au/Cn/Show/"+encodeURIComponent(cn);
 
+/* Shards dictionary-encode their repetitive columns. Decoding assigns the
+   SHARED string, so 6,000 rows referencing one agency hold one string between
+   them rather than 6,000 copies. */
 function expand(sh){
   const f=sh.fields||S.idx.fields||[];
-  return (sh.rows||[]).map(r=>{const o={};f.forEach((k,i)=>o[k]=r[i]);return o;});
+  const d=sh.dict||null;
+  return (sh.rows||[]).map(r=>{
+    const o={};
+    for(let i=0;i<f.length;i++){
+      const k=f[i]; let v=r[i];
+      if(d&&d[k]!==undefined&&typeof v==="number") v=d[k][v];
+      o[k]=v;
+    }
+    return o;
+  });
 }
 /* Month shards mean a date filter fetches only the months it needs, instead of
    pulling ~100 MB of archive to answer a question about one quarter. */
@@ -297,6 +314,8 @@ async function ensureMonths(months){
       }catch(e){ S.shards.set(m,[]); }
       p.value=++done;
       c.innerHTML=`Loading ${done} of ${need.length} months…`;
+      // Paint partial results as they arrive rather than holding a blank table.
+      if(done===1||done%8===0){ rebuild(); c.innerHTML=`Loading ${done} of ${need.length} months…`; }
     }
   }
   await Promise.all(Array.from({length:Math.min(LANES,need.length)},lane));
@@ -315,7 +334,6 @@ function rebuild(){
       if(up){ r=Object.assign({},r,up); r._p=undefined; }
       if(r._p===undefined){
         r._f=(r.flags||"").split(",").filter(Boolean);
-        r._h=((r.title||"")+" "+(r.supplier||"")+" "+(r.buyer||"")+" "+(r.cn||"")+" "+(r.abn||"")).toLowerCase();
         r._g=(r.value&&r.value_first&&r.value_first>0)?(r.value/r.value_first-1):0;
         r._p=1;
       }
@@ -334,7 +352,7 @@ async function boot(){
   }
   if(!idx){
     $("#count").textContent="Could not load the archive index.";
-    $("#tb").innerHTML='<tr><td colspan="6" class="empty">No archive found. '+
+    $("#tb").innerHTML='<tr><td colspan="8" class="empty">No archive found. '+
       'Run the refresh workflow to build <code>data/</code>.</td></tr>';
     return;
   }
@@ -437,7 +455,13 @@ function apply(){
   if(S.tab==="s") return applySup();
   const q=S.q;
   S.view=S.rows.filter(r=>{
-    if(q&&!r._h.includes(q)) return false;
+    // Built on first search only, then cached on the row.
+    if(q){
+      if(r._h===undefined)
+        r._h=((r.title||"")+" "+(r.supplier||"")+" "+(r.buyer||"")+" "+
+              (r.cn||"")+" "+(r.abn||"")).toLowerCase();
+      if(!r._h.includes(q)) return false;
+    }
     if(S.agency&&r.buyer!==S.agency) return false;
     if(S.d1&&(r.pub||"")<S.d1) return false;
     if(S.d2&&(r.pub||"")>S.d2) return false;
@@ -452,6 +476,8 @@ function apply(){
     s==="value_asc"?(a.value||0)-(b.value||0):
     s==="growth"?b._g-a._g:
     s==="pub_asc"?String(a.pub||"").localeCompare(String(b.pub||"")):
+    s==="start"?String(b.start||"").localeCompare(String(a.start||"")):
+    s==="end"?String(a.end||"9999").localeCompare(String(b.end||"9999")):
     String(b.pub||"").localeCompare(String(a.pub||"")));
   S.page=0;
   // Only AUD rows are summed; a mixed-currency total would be meaningless.
@@ -465,7 +491,7 @@ function draw(){
   const max=Math.max(...S.view.slice(0,400).map(r=>r.value||0),1);
   const part=S.view.slice(S.page*S.PER,(S.page+1)*S.PER);
   if(!part.length&&S.page===0){
-    $("#tb").innerHTML='<tr><td colspan="6" class="empty">No contracts match these filters.</td></tr>';
+    $("#tb").innerHTML='<tr><td colspan="8" class="empty">No contracts match these filters.</td></tr>';
     $("#more").innerHTML=""; return;
   }
   const lg=v=>v>0?Math.min(100,Math.log10(v+1)/Math.log10(max+1)*100):0;
@@ -480,6 +506,8 @@ function draw(){
       <div class="rule" title="${grew?"First seen at "+money(r.value_first):""}">
         <i style="width:${lg(r.value)}%"></i>${grew?`<u style="left:${lg(r.value_first)}%"></u>`:""}</div></td>
     <td class="hide-s num">${esc(r.pub||"—")}</td>
+    <td class="hide-m num">${esc(r.start||"—")}</td>
+    <td class="hide-m num">${esc(r.end||"—")}</td>
     <td>${r._f.map(f=>`<span class="flag" title="${esc(FLAGS[f]||f)}">${esc(f.replace(/_/g," "))}</span>`).join("")}</td>
   </tr>`;}).join(""));
   const left=S.view.length-(S.page+1)*S.PER;
