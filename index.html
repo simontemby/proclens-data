@@ -100,9 +100,8 @@ dialog#filterSheet::backdrop{background:rgba(10,12,16,.5)}
 .fsheet-foot{display:none}
 @media(max-width:899px){
   dialog#filterSheet{position:fixed;inset:auto 0 0 0;width:100%;max-width:none;margin:0;
-    max-height:88vh;border-radius:16px 16px 0 0;border-width:1px 0 0 0;
-    display:flex;flex-direction:column}
-  dialog#filterSheet[open]{animation:sheetup .18s ease-out}
+    max-height:88vh;border-radius:16px 16px 0 0;border-width:1px 0 0 0}
+  dialog#filterSheet[open]{display:flex;flex-direction:column;animation:sheetup .18s ease-out}
   @keyframes sheetup{from{transform:translateY(12%);opacity:.4}to{transform:translateY(0);opacity:1}}
   .fsheet-head{display:flex;align-items:center;justify-content:space-between;
     padding:14px 16px;border-bottom:1px solid var(--line);flex:none}
