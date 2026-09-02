@@ -1,1 +1,33 @@
+name: Refresh bundle
 
+on:
+  schedule:
+    - cron: "0 18 * * 0"   # Sundays 18:00 UTC — 04:00 Monday AEST
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: pip install requests
+
+      - run: python refresh.py --months 24 --out bundle.json
+        env:
+          AUSTENDER_TOKEN: ${{ secrets.AUSTENDER_TOKEN }}
+
+      - name: Commit bundle
+        run: |
+          git config user.name "proclens-bot"
+          git config user.email "proclens-bot@users.noreply.github.com"
+          git add bundle.json
+          git diff --staged --quiet || git commit -m "Refresh $(date -u +%F)"
+          git push
