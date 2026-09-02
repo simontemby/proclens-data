@@ -1,33 +1,52 @@
-name: Refresh bundle
+name: Refresh archive
 
 on:
   schedule:
     - cron: "0 18 * * 0"   # Sundays 18:00 UTC — 04:00 Monday AEST
   workflow_dispatch:
+    inputs:
+      backfill_from:
+        description: "Deep backfill start date (YYYY-MM-DD). Leave blank for the weekly top-up."
+        required: false
+        default: ""
 
 permissions:
   contents: write
 
+concurrency:
+  group: refresh-archive
+  cancel-in-progress: false
+
 jobs:
   refresh:
     runs-on: ubuntu-latest
+    timeout-minutes: 330
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
       - run: pip install requests
 
-      - run: python refresh.py --months 24 --out bundle.json
+      # A backfill walks contractPublished, which reaches back years. The weekly
+      # run walks contractLastModified, which only covers roughly two years but
+      # is what surfaces amendments to older contracts.
+      - name: Build archive
         env:
           AUSTENDER_TOKEN: ${{ secrets.AUSTENDER_TOKEN }}
-
-      - name: Commit bundle
         run: |
-          git config user.name "proclens-bot"
-          git config user.email "proclens-bot@users.noreply.github.com"
-          git add bundle.json
-          git diff --staged --quiet || git commit -m "Refresh $(date -u +%F)"
+          if [ -n "${{ github.event.inputs.backfill_from }}" ]; then
+            python refresh.py --backfill-from "${{ github.event.inputs.backfill_from }}"
+          else
+            python refresh.py --since-days 21
+          fi
+
+      - name: Commit archive
+        run: |
+          git config user.name "legal-tender-bot"
+          git config user.email "legal-tender-bot@users.noreply.github.com"
+          git add data
+          git diff --staged --quiet || git commit -m "Archive refresh $(date -u +%F)"
           git push

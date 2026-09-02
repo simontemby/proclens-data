@@ -4,26 +4,27 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Legal Tender — Australian government contracts</title>
-<meta name="description" content="Search Australian Commonwealth government contract notices. Open data from AusTender, refreshed weekly.">
+<meta name="description" content="A growing archive of Australian Commonwealth contract notices. Search and filter by date, amount, agency and supplier.">
 <style>
 :root{
   --paper:#faf8f3; --ink:#1c1e1a; --muted:#5d6157; --line:#d9d5c8;
   --green:#1f4a37; --green-soft:#e8efe9; --rust:#a4441f; --rust-soft:#f6e7e0;
-  --band:#f3f1e8; --focus:#1f4a37; --card:#fff;
+  --amber:#8a6d1f; --amber-soft:#f7efd8;
+  --band:#f3f1e8; --card:#fff;
   --r:6px; --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
   --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
 }
 @media(prefers-color-scheme:dark){:root{
   --paper:#15171a; --ink:#e8e6df; --muted:#9aa094; --line:#2e3238;
   --green:#7fbf9e; --green-soft:#1a2b23; --rust:#e08a63; --rust-soft:#2e1f18;
-  --band:#1b1e21; --card:#1a1d20; --focus:#7fbf9e;
+  --amber:#d9b45e; --amber-soft:#2b2415;
+  --band:#1b1e21; --card:#1a1d20;
 }}
 *{box-sizing:border-box}
-body{margin:0;background:var(--paper);color:var(--ink);font:15px/1.5 var(--sans);
-  -webkit-font-smoothing:antialiased}
-.wrap{max-width:1180px;margin:0 auto;padding:0 16px}
+body{margin:0;background:var(--paper);color:var(--ink);font:15px/1.5 var(--sans)}
+.wrap{max-width:1240px;margin:0 auto;padding:0 16px}
 a{color:var(--green)}
-:focus-visible{outline:2px solid var(--focus);outline-offset:2px;border-radius:3px}
+:focus-visible{outline:2px solid var(--green);outline-offset:2px;border-radius:3px}
 .skip{position:absolute;left:-9999px}
 .skip:focus{left:8px;top:8px;background:var(--card);padding:8px 12px;z-index:99;border:1px solid var(--line)}
 
@@ -32,69 +33,74 @@ header{border-bottom:2px solid var(--green);background:var(--card)}
 h1{font-size:25px;margin:0;letter-spacing:-.02em}
 h1 .co{color:var(--rust)}
 .tag{color:var(--muted);font-size:13.5px;margin:0}
-.head .sp{flex:1}
+.sp{flex:1}
+.tabs{display:flex;gap:4px}
+.tab{font:13px var(--sans);padding:7px 14px;border:1px solid var(--line);background:var(--card);
+  color:var(--muted);cursor:pointer;border-radius:var(--r)}
+.tab[aria-selected=true]{background:var(--green);color:var(--paper);border-color:var(--green);font-weight:600}
 
-.tools{position:sticky;top:0;z-index:20;background:var(--paper);
-  border-bottom:1px solid var(--line);padding:10px 0}
-.searchrow{display:flex;gap:8px;flex-wrap:wrap}
-#q{flex:1;min-width:210px;font:16px var(--sans);padding:10px 12px;
+.tools{background:var(--paper);border-bottom:1px solid var(--line);padding:10px 0}
+.row1{display:flex;gap:8px;flex-wrap:wrap}
+#q{flex:1;min-width:200px;font:16px var(--sans);padding:10px 12px;
   border:1px solid var(--line);border-radius:var(--r);background:var(--card);color:var(--ink)}
-select,button{font:14px var(--sans);padding:9px 11px;border:1px solid var(--line);
-  border-radius:var(--r);background:var(--card);color:var(--ink);cursor:pointer}
+select,button,input[type=date],input[type=number]{font:14px var(--sans);padding:9px 10px;
+  border:1px solid var(--line);border-radius:var(--r);background:var(--card);color:var(--ink)}
+button,select{cursor:pointer}
 button:hover,select:hover{border-color:var(--green)}
 .btn-p{background:var(--green);color:var(--paper);border-color:var(--green);font-weight:600}
-.filters{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;align-items:center}
+.grp{display:flex;gap:6px;align-items:center;flex-wrap:wrap;
+  border:1px solid var(--line);border-radius:var(--r);padding:5px 9px;background:var(--card)}
+.grp label{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.grp input[type=date]{border:none;padding:3px;background:transparent;min-width:118px}
+.grp input[type=number]{border:none;padding:3px;background:transparent;width:96px;
+  font-family:var(--mono);text-align:right}
+.row2{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;align-items:center}
 .chip{font:12.5px var(--sans);padding:5px 10px;border-radius:20px;
-  border:1px solid var(--line);background:var(--card);color:var(--muted)}
+  border:1px solid var(--line);background:var(--card);color:var(--muted);cursor:pointer}
 .chip[aria-pressed=true]{background:var(--green-soft);border-color:var(--green);
   color:var(--green);font-weight:600}
 .count{color:var(--muted);font-size:13px;padding:8px 0 0}
 .count b{color:var(--ink);font-variant-numeric:tabular-nums}
 
-.note{background:var(--green-soft);border-left:3px solid var(--green);
+.note{border-left:3px solid var(--green);background:var(--green-soft);
   padding:10px 14px;margin:14px 0;font-size:13.5px;border-radius:0 var(--r) var(--r) 0}
-.note b{color:var(--green)}
+.note.warn{border-color:var(--amber);background:var(--amber-soft)}
+.note b{color:var(--green)} .note.warn b{color:var(--amber)}
 
 table{width:100%;border-collapse:collapse;font-size:14px}
 .tw{overflow-x:auto;border:1px solid var(--line);border-radius:var(--r);background:var(--card)}
 th{text-align:left;font-size:11.5px;text-transform:uppercase;letter-spacing:.06em;
   color:var(--muted);padding:9px 10px;border-bottom:1px solid var(--line);
-  background:var(--card);white-space:nowrap;position:sticky;top:0}
-th button{all:unset;cursor:pointer;font:inherit;color:inherit;display:block;width:100%}
+  background:var(--card);white-space:nowrap}
+th button{all:unset;cursor:pointer;font:inherit;color:inherit}
 th button:hover{color:var(--green)}
 td{padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top}
 tbody tr:nth-child(even){background:var(--band)}
 tbody tr:hover{background:var(--green-soft)}
 .num{text-align:right;font-variant-numeric:tabular-nums;font-family:var(--mono);white-space:nowrap}
-.t-title{font-weight:600;max-width:330px}
+.t-title{font-weight:600;max-width:320px}
 .t-sub{color:var(--muted);font-size:12.5px;font-family:var(--mono)}
-.t-party{max-width:200px;font-size:13.5px}
-.rule{height:4px;background:var(--line);border-radius:2px;margin-top:5px;
-  position:relative;min-width:70px}
+.t-party{max-width:190px;font-size:13.5px}
+.rule{height:4px;background:var(--line);border-radius:2px;margin-top:5px;position:relative;min-width:70px}
 .rule i{position:absolute;inset:0 auto 0 0;background:var(--green);border-radius:2px}
 .rule u{position:absolute;top:-2px;width:2px;height:8px;background:var(--rust)}
 .flag{display:inline-block;font-size:11px;font-family:var(--mono);padding:2px 6px;
-  border-radius:3px;background:var(--rust-soft);color:var(--rust);margin:1px 2px 1px 0;
-  white-space:nowrap}
+  border-radius:3px;background:var(--rust-soft);color:var(--rust);margin:1px 2px 1px 0;white-space:nowrap}
+.alias{font-size:12px;color:var(--muted);font-style:italic}
 .linkbtn{all:unset;cursor:pointer;color:var(--green);text-decoration:underline;font:inherit}
+progress{width:100%;height:4px}
 
-dialog{border:1px solid var(--line);border-radius:8px;padding:0;max-width:640px;width:92vw;
+dialog{border:1px solid var(--line);border-radius:8px;padding:0;max-width:660px;width:92vw;
   background:var(--card);color:var(--ink)}
 dialog::backdrop{background:rgba(0,0,0,.5)}
 .dh{display:flex;justify-content:space-between;gap:12px;align-items:start;
   padding:16px;border-bottom:1px solid var(--line)}
 .db{padding:16px;max-height:64vh;overflow:auto}
-.kv{display:grid;grid-template-columns:145px 1fr;gap:7px 14px;font-size:14px}
-.kv dt{color:var(--muted)}
-.kv dd{margin:0;word-break:break-word}
-footer{border-top:1px solid var(--line);margin-top:32px;padding:18px 0 40px;
-  color:var(--muted);font-size:13px}
+.kv{display:grid;grid-template-columns:160px 1fr;gap:7px 14px;font-size:14px}
+.kv dt{color:var(--muted)} .kv dd{margin:0;word-break:break-word}
+footer{border-top:1px solid var(--line);margin-top:32px;padding:18px 0 40px;color:var(--muted);font-size:13px}
 .empty{padding:44px 16px;text-align:center;color:var(--muted)}
-@media(max-width:640px){
-  .hide-s{display:none}
-  h1{font-size:21px}
-  .t-title{max-width:none}
-}
+@media(max-width:700px){.hide-s{display:none} h1{font-size:21px} .t-title{max-width:none}}
 </style>
 </head>
 <body>
@@ -105,162 +111,327 @@ footer{border-top:1px solid var(--line);margin-top:32px;padding:18px 0 40px;
     <h1>Legal Tender<span class="co">.</span></h1>
     <p class="tag">Where the Commonwealth's money actually goes.</p>
     <span class="sp"></span>
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" id="tab-c" aria-selected="true">Contracts</button>
+      <button class="tab" role="tab" id="tab-s" aria-selected="false">Suppliers</button>
+    </div>
     <button id="csv">Export CSV</button>
   </div>
 </header>
 
 <div class="tools">
   <div class="wrap">
-    <div class="searchrow">
-      <label class="skip" for="q">Search contracts</label>
-      <input id="q" type="search" placeholder="Search supplier, agency, subject or CN number…"
+    <div class="row1">
+      <label class="skip" for="q">Search</label>
+      <input id="q" type="search" placeholder="Search subject, supplier, agency, ABN or CN…"
              autocomplete="off" spellcheck="false">
+      <div class="grp">
+        <label for="d1">Published</label>
+        <input id="d1" type="date"> <span aria-hidden="true">→</span> <input id="d2" type="date">
+      </div>
+      <div class="grp">
+        <label for="v1">Value $</label>
+        <input id="v1" type="number" placeholder="min" min="0" step="1000">
+        <span aria-hidden="true">→</span>
+        <input id="v2" type="number" placeholder="max" min="0" step="1000">
+      </div>
+    </div>
+    <div class="row1" style="margin-top:8px">
       <label class="skip" for="agency">Agency</label>
       <select id="agency"><option value="">All agencies</option></select>
       <label class="skip" for="sort">Sort</label>
       <select id="sort">
         <option value="pub">Newest first</option>
+        <option value="pub_asc">Oldest first</option>
         <option value="value">Largest value</option>
         <option value="value_asc">Smallest value</option>
-        <option value="growth">Biggest value growth</option>
+        <option value="growth">Most observed growth</option>
       </select>
+      <button id="reset">Reset filters</button>
     </div>
-    <div class="filters" id="chips" role="group" aria-label="Filter by review flag"></div>
-    <p class="count" id="count" role="status" aria-live="polite">Loading…</p>
+    <div class="row2" id="chips" role="group" aria-label="Filter by review flag"></div>
+    <p class="count" id="count" role="status" aria-live="polite">Loading archive…</p>
+    <progress id="prog" max="100" value="0" hidden></progress>
   </div>
 </div>
 
 <main class="wrap" id="results">
-  <div class="note">
-    <b>These flags are a review queue, not findings.</b> Every one has innocent
-    explanations — emergency work is legitimately limited-tender, long IT contracts are
-    normal, and thresholds change. They mark records worth a look, nothing more.
-  </div>
-  <div class="tw">
-    <table>
-      <caption class="skip">Commonwealth contract notices</caption>
-      <thead><tr>
-        <th scope="col"><button data-s="title">Contract</button></th>
-        <th scope="col" class="hide-s"><button data-s="buyer">Agency</button></th>
-        <th scope="col"><button data-s="supplier">Supplier</button></th>
-        <th scope="col" class="num"><button data-s="value">Value</button></th>
-        <th scope="col" class="hide-s"><button data-s="pub">Published</button></th>
-        <th scope="col">Flags</th>
-      </tr></thead>
-      <tbody id="tb"></tbody>
-    </table>
-  </div>
-  <div id="more" style="text-align:center;padding:16px"></div>
+  <div class="note" id="scopenote"></div>
+  <div class="note warn" id="truthnote"></div>
+
+  <section id="pane-c">
+    <div class="tw">
+      <table>
+        <caption class="skip">Commonwealth contract notices</caption>
+        <thead><tr>
+          <th scope="col">Contract</th>
+          <th scope="col" class="hide-s">Agency</th>
+          <th scope="col">Supplier</th>
+          <th scope="col" class="num"><button data-s="value">Value</button></th>
+          <th scope="col" class="hide-s num"><button data-s="pub">Published</button></th>
+          <th scope="col">Flags</th>
+        </tr></thead>
+        <tbody id="tb"></tbody>
+      </table>
+    </div>
+    <div id="more" style="text-align:center;padding:16px"></div>
+  </section>
+
+  <section id="pane-s" hidden>
+    <div class="note"><b>Grouped by ABN, not by name.</b> The same entity is
+      published under several spellings, so a name-keyed total undercounts it.
+      Alternate spellings seen for each ABN are listed beneath the canonical name.</div>
+    <div class="tw">
+      <table>
+        <caption class="skip">Suppliers by ABN</caption>
+        <thead><tr>
+          <th scope="col">Supplier (by ABN)</th>
+          <th scope="col" class="num">Contracts</th>
+          <th scope="col" class="hide-s num">Agencies</th>
+          <th scope="col" class="num">Total committed</th>
+        </tr></thead>
+        <tbody id="tbs"></tbody>
+      </table>
+    </div>
+    <div id="mores" style="text-align:center;padding:16px"></div>
+  </section>
 </main>
 
 <dialog id="dlg" aria-labelledby="dlg-t">
-  <div class="dh">
-    <strong id="dlg-t">Contract</strong>
-    <button onclick="document.getElementById('dlg').close()" aria-label="Close">Close</button>
-  </div>
+  <div class="dh"><strong id="dlg-t">Contract</strong>
+    <button onclick="document.getElementById('dlg').close()">Close</button></div>
   <div class="db"><dl class="kv" id="dlg-b"></dl></div>
 </dialog>
 
 <footer class="wrap">
-  <p><strong>Legal Tender</strong> reads Commonwealth contract notices published by
-  agencies to AusTender under the Commonwealth Procurement Rules. Source data is
+  <p><strong>Legal Tender</strong> archives Commonwealth contract notices published to
+  AusTender under the Commonwealth Procurement Rules. Source data is
   <a href="https://api.tenders.gov.au/ocds/" rel="noopener">Department of Finance open data</a>
-  (CC BY 3.0 AU). Values are committed at award, not cash actually paid.</p>
+  (CC BY 3.0 AU). Values are committed at award, not amounts actually paid.</p>
   <p id="prov">—</p>
 </footer>
 
 <!--PROCLENS_BUNDLE_SLOT-->
 <script>
 "use strict";
-const FLAGS = {
+const FLAGS={
   late_publish:"Published more than 42 days after signing",
-  value_growth:"Value grew more than 50% through amendments",
+  value_growth:"Value grew more than 50% since this archive first saw it",
   threshold_hugging:"Value sits just under a procurement threshold",
   backdated:"Signed well after the start date",
   limited_tender:"Awarded without open competition",
-  long_term:"Runs longer than five years"
+  long_term:"Runs longer than five years",
+  agent_or_trustee:"Supplier name contains an agent, trustee or trading-as entity"
 };
-const S={rows:[],view:[],page:0,PER:100,q:"",agency:"",sort:"pub",flags:new Set()};
+const DATA="./data/";
+const S={idx:null,shards:new Map(),rows:[],view:[],sup:[],supView:[],page:0,sPage:0,PER:100,
+  q:"",agency:"",sort:"pub",flags:new Set(),d1:"",d2:"",v1:null,v2:null,tab:"c"};
 const $=s=>document.querySelector(s);
 const money=n=>n==null?"—":"$"+Math.round(n).toLocaleString("en-AU");
 const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const cnUrl=cn=>"https://www.tenders.gov.au/Cn/Show/"+encodeURIComponent(cn);
 
-/* refresh.py writes a columnar bundle: {fields:[...], rows:[[...]]}. Expanding it
-   here keeps the file small on the wire — objects would roughly double it. */
-function expand(b){
-  if(Array.isArray(b.records)) return b.records;
-  const f=b.fields||[];
-  return (b.rows||[]).map(r=>{const o={};f.forEach((k,i)=>o[k]=r[i]);return o;});
+function expand(sh){
+  const f=sh.fields||S.idx.fields||[];
+  return (sh.rows||[]).map(r=>{const o={};f.forEach((k,i)=>o[k]=r[i]);return o;});
+}
+/* Month shards mean a date filter fetches only the months it needs, instead of
+   pulling ~100 MB of archive to answer a question about one quarter. */
+function monthsFor(d1,d2){
+  if(S.embedded) return [...S.shards.keys()];
+  return (S.idx.shards||[]).filter(s=>{
+    if(s.month==="unknown") return false;
+    if(d1&&s.month<d1.slice(0,7)) return false;
+    if(d2&&s.month>d2.slice(0,7)) return false;
+    return true;
+  }).map(s=>s.month);
+}
+/* A self-contained --embed build carries every row inline; group them into the
+   same month buckets the fetch path uses so both share one code path. */
+function seedFromBundle(b){
+  const f=b.fields||[], rows=(b.rows||[]).map(r=>{const o={};f.forEach((k,i)=>o[k]=r[i]);return o;});
+  const by=new Map();
+  for(const r of rows){
+    const m=(r.pub||"").slice(0,7)||"unknown";
+    if(!by.has(m)) by.set(m,[]);
+    by.get(m).push(r);
+  }
+  S.shards=by;
+}
+/* Month shards are immutable — what AusTender said when we first saw each
+   contract. updates.json carries every row that changed since, and is overlaid
+   by ocid so the table shows current truth without rewriting the shards. */
+async function loadOverlay(){
+  if(S.overlay) return;
+  S.overlay=new Map();
+  try{
+    const r=await fetch(DATA+"updates.json",{cache:"no-cache"});
+    if(r.ok){
+      const u=await r.json(), f=u.fields||S.idx.fields||[];
+      for(const row of u.rows||[]){
+        const o={}; f.forEach((k,i)=>o[k]=row[i]);
+        const key=o.ocid||o.cn; if(key) S.overlay.set(key,o);
+      }
+    }
+  }catch(e){}
+}
+async function ensureMonths(months){
+  if(S.embedded){ rebuild(); return; }
+  await loadOverlay();
+  const need=months.filter(m=>!S.shards.has(m));
+  if(!need.length) return;
+  const p=$("#prog"); p.hidden=false; p.max=need.length; p.value=0;
+  let done=0;
+  for(const m of need){
+    try{
+      const res=await fetch(`${DATA}contracts-${m}.json`,{cache:"force-cache"});
+      S.shards.set(m,res.ok?expand(await res.json()):[]);
+    }catch(e){ S.shards.set(m,[]); }
+    p.value=++done;
+  }
+  p.hidden=true;
+  rebuild();
+}
+function rebuild(){
+  const months=monthsFor(S.d1,S.d2);
+  S.rows=[];
+  for(const m of months){
+    const rs=S.shards.get(m); if(!rs) continue;
+    for(let r of rs){
+      const up=S.overlay&&S.overlay.get(r.ocid||r.cn);
+      // Object.assign also copies the _p cache marker, which would leave the
+      // merged row carrying the BASE row's flags and growth. Force a recompute.
+      if(up){ r=Object.assign({},r,up); r._p=undefined; }
+      if(r._p===undefined){
+        r._f=(r.flags||"").split(",").filter(Boolean);
+        r._h=((r.title||"")+" "+(r.supplier||"")+" "+(r.buyer||"")+" "+(r.cn||"")+" "+(r.abn||"")).toLowerCase();
+        r._g=(r.value&&r.value_first&&r.value_first>0)?(r.value/r.value_first-1):0;
+        r._p=1;
+      }
+      S.rows.push(r);
+    }
+  }
+  buildAgencies(); apply();
 }
 
 async function boot(){
-  /* Inlined by `refresh.py --embed` for a self-contained build; otherwise fetched
-     from the same directory, which needs no CORS and no URL to paste. */
-  let b=window.__PROCLENS_BUNDLE__||null;
-  if(!b){
-    try{
-      const res=await fetch("./bundle.json",{cache:"no-cache"});
-      if(res.ok) b=await res.json();
-    }catch(e){}
+  const emb=window.__PROCLENS_BUNDLE__||null;
+  let idx=emb?.index||null;
+  if(emb){ S.embedded=true; seedFromBundle(emb); }
+  if(!idx){
+    try{ const r=await fetch(DATA+"index.json",{cache:"no-cache"}); if(r.ok) idx=await r.json(); }catch(e){}
   }
-  if(!b){
-    $("#count").textContent="Could not load bundle.json.";
-    $("#tb").innerHTML='<tr><td colspan="6" class="empty">No data file found. '+
-      'The weekly refresh writes <code>bundle.json</code> beside this page.</td></tr>';
+  if(!idx){
+    $("#count").textContent="Could not load the archive index.";
+    $("#tb").innerHTML='<tr><td colspan="6" class="empty">No archive found. '+
+      'Run the refresh workflow to build <code>data/</code>.</td></tr>';
     return;
   }
-  S.rows=expand(b).filter(r=>r.id);
-  for(const r of S.rows){
-    r._f=(r.flags||"").split(",").filter(Boolean);
-    r._h=((r.title||"")+" "+(r.supplier||"")+" "+(r.buyer||"")+" "+(r.cn||"")).toLowerCase();
-    r._g=(r.value&&r.value_orig&&r.value_orig>0)?(r.value/r.value_orig-1):0;
+  S.idx=idx;
+  const cov=idx.coverage||{}, t=idx.totals||{};
+  // Default to the most recent three months so a first paint is fast; the date
+  // filter pulls more on demand.
+  const all=(idx.shards||[]).map(s=>s.month).filter(m=>m!=="unknown").sort();
+  const recent=all.slice(-3);
+  S.d1=(recent[0]||cov.from||"")+"-01";
+  S.d2=cov.to||"";
+  $("#d1").value=S.d1; $("#d2").value=S.d2;
+  $("#d1").min=$("#d2").min=(all[0]||"")+"-01"; $("#d1").max=$("#d2").max=cov.to||"";
+
+  $("#scopenote").innerHTML=`<b>Archive covers ${esc(cov.from||"?")} to ${esc(cov.to||"?")}</b> — `+
+    `${(t.contracts||0).toLocaleString()} contracts, ${(t.suppliers_by_abn||0).toLocaleString()} `+
+    `suppliers by ABN, ${money(t.value_aud)} committed. Showing the most recent three months; `+
+    `widen the date filter to load more.`;
+  $("#truthnote").innerHTML=`<b>What this archive can and cannot show.</b> AusTender's API `+
+    `publishes only each contract's current state — there is no amendment history. `+
+    `Values before <b>${esc(idx.archive_start||"?")}</b>, when this archive started, are not `+
+    `recoverable, so "observed growth" means growth seen since then, not a contract's full life. `+
+    `Values are committed at award, not amounts paid. Panel and standing-offer relationships, `+
+    `and subcontractors, are not published in this feed.`;
+  $("#prov").textContent=`Generated ${String(idx.generated||"").slice(0,19).replace("T"," ")} UTC · `+
+    `archive started ${idx.archive_start||"?"} · ${(idx.shards||[]).length} monthly shards.`;
+
+  buildChips(); wire();
+  if(S.embedded){
+    // Show the whole embedded archive rather than the default recent window.
+    S.d1=""; S.d2=""; $("#d1").value=""; $("#d2").value="";
   }
-  const cap=b.captured_at||b.generated||"";
-  $("#prov").textContent=`${S.rows.length.toLocaleString()} contract processes`+
-    (cap?`, captured ${String(cap).slice(0,10)}`:"")+". Amendments are rolled up by OCID.";
-  buildAgencies(); buildChips(); wire(); apply();
+  await ensureMonths(monthsFor(S.d1,S.d2));
+  if(emb?.suppliers){ S.sup=emb.suppliers; } else { loadSuppliers(); }
+}
+
+async function loadSuppliers(){
+  try{
+    const r=await fetch(DATA+"suppliers.json",{cache:"no-cache"});
+    if(r.ok){ S.sup=(await r.json()).suppliers||[]; if(S.tab==="s") applySup(); }
+  }catch(e){}
 }
 
 function buildAgencies(){
   const c=new Map();
   for(const r of S.rows) if(r.buyer) c.set(r.buyer,(c.get(r.buyer)||0)+1);
-  const sel=$("#agency");
-  [...c.entries()].sort((a,b)=>b[1]-a[1]).slice(0,300).forEach(([n,k])=>{
+  const sel=$("#agency"), keep=sel.value;
+  sel.innerHTML='<option value="">All agencies</option>';
+  [...c.entries()].sort((a,b)=>b[1]-a[1]).forEach(([n,k])=>{
     const o=document.createElement("option");
     o.value=n; o.textContent=`${n} (${k.toLocaleString()})`; sel.append(o);
   });
+  sel.value=keep;
 }
 function buildChips(){
   const n=$("#chips");
-  for(const [k,desc] of Object.entries(FLAGS)){
+  for(const [k,d] of Object.entries(FLAGS)){
     const b=document.createElement("button");
-    b.className="chip"; b.type="button"; b.dataset.f=k;
-    b.setAttribute("aria-pressed","false"); b.title=desc;
-    b.textContent=k.replace(/_/g," ");
-    b.onclick=()=>{
-      S.flags.has(k)?S.flags.delete(k):S.flags.add(k);
-      b.setAttribute("aria-pressed",String(S.flags.has(k)));
-      apply();
-    };
+    b.className="chip"; b.type="button"; b.dataset.f=k; b.title=d;
+    b.setAttribute("aria-pressed","false"); b.textContent=k.replace(/_/g," ");
+    b.onclick=()=>{S.flags.has(k)?S.flags.delete(k):S.flags.add(k);
+      b.setAttribute("aria-pressed",String(S.flags.has(k))); apply();};
     n.append(b);
   }
 }
 function wire(){
-  let t; $("#q").oninput=e=>{clearTimeout(t);t=setTimeout(()=>{S.q=e.target.value.trim().toLowerCase();apply();},180);};
+  let t;
+  $("#q").oninput=e=>{clearTimeout(t);t=setTimeout(()=>{S.q=e.target.value.trim().toLowerCase();
+    S.tab==="s"?applySup():apply();},180);};
   $("#agency").onchange=e=>{S.agency=e.target.value;apply();};
   $("#sort").onchange=e=>{S.sort=e.target.value;apply();};
+  const dch=()=>{S.d1=$("#d1").value; S.d2=$("#d2").value; ensureMonths(monthsFor(S.d1,S.d2));};
+  $("#d1").onchange=dch; $("#d2").onchange=dch;
+  const vch=()=>{const a=parseFloat($("#v1").value),b=parseFloat($("#v2").value);
+    S.v1=isNaN(a)?null:a; S.v2=isNaN(b)?null:b; apply();};
+  $("#v1").oninput=()=>{clearTimeout(t);t=setTimeout(vch,250);};
+  $("#v2").oninput=()=>{clearTimeout(t);t=setTimeout(vch,250);};
+  $("#reset").onclick=()=>{
+    S.q="";S.agency="";S.v1=S.v2=null;S.flags.clear();
+    $("#q").value="";$("#agency").value="";$("#v1").value="";$("#v2").value="";
+    document.querySelectorAll(".chip").forEach(c=>c.setAttribute("aria-pressed","false"));
+    S.tab==="s"?applySup():apply();
+  };
   document.querySelectorAll("th button[data-s]").forEach(b=>{
-    b.onclick=()=>{const m={title:"pub",buyer:"pub",supplier:"pub",value:"value",pub:"pub"};
-      S.sort=m[b.dataset.s]||"pub"; $("#sort").value=S.sort; apply();};
+    b.onclick=()=>{S.sort=b.dataset.s;$("#sort").value=S.sort;apply();};
   });
   $("#csv").onclick=exportCSV;
+  $("#tab-c").onclick=()=>switchTab("c");
+  $("#tab-s").onclick=()=>switchTab("s");
+}
+function switchTab(t){
+  S.tab=t;
+  $("#tab-c").setAttribute("aria-selected",String(t==="c"));
+  $("#tab-s").setAttribute("aria-selected",String(t==="s"));
+  $("#pane-c").hidden=t!=="c"; $("#pane-s").hidden=t!=="s";
+  t==="s"?applySup():apply();
 }
 
 function apply(){
+  if(S.tab==="s") return applySup();
   const q=S.q;
   S.view=S.rows.filter(r=>{
     if(q&&!r._h.includes(q)) return false;
     if(S.agency&&r.buyer!==S.agency) return false;
+    if(S.d1&&(r.pub||"")<S.d1) return false;
+    if(S.d2&&(r.pub||"")>S.d2) return false;
+    if(S.v1!=null&&!(r.value>=S.v1)) return false;
+    if(S.v2!=null&&!(r.value<=S.v2)) return false;
     for(const f of S.flags) if(!r._f.includes(f)) return false;
     return true;
   });
@@ -269,70 +440,115 @@ function apply(){
     s==="value"?(b.value||0)-(a.value||0):
     s==="value_asc"?(a.value||0)-(b.value||0):
     s==="growth"?b._g-a._g:
+    s==="pub_asc"?String(a.pub||"").localeCompare(String(b.pub||"")):
     String(b.pub||"").localeCompare(String(a.pub||"")));
   S.page=0;
-  const tot=S.view.reduce((n,r)=>n+(r.value||0),0);
-  $("#count").innerHTML=`<b>${S.view.length.toLocaleString()}</b> of `+
-    `${S.rows.length.toLocaleString()} contracts · <b>${money(tot)}</b> committed`;
+  // Only AUD rows are summed; a mixed-currency total would be meaningless.
+  let tot=0,non=0;
+  for(const r of S.view){ if((r.cur||"AUD")==="AUD") tot+=r.value||0; else non++; }
+  $("#count").innerHTML=`<b>${S.view.length.toLocaleString()}</b> of ${S.rows.length.toLocaleString()} loaded `+
+    `· <b>${money(tot)}</b> committed`+(non?` · ${non} non-AUD excluded from total`:"");
   $("#tb").innerHTML=""; draw();
 }
-
 function draw(){
   const max=Math.max(...S.view.slice(0,400).map(r=>r.value||0),1);
   const part=S.view.slice(S.page*S.PER,(S.page+1)*S.PER);
   if(!part.length&&S.page===0){
-    $("#tb").innerHTML='<tr><td colspan="6" class="empty">No contracts match. '+
-      'Try clearing a filter.</td></tr>'; $("#more").innerHTML=""; return;
+    $("#tb").innerHTML='<tr><td colspan="6" class="empty">No contracts match these filters.</td></tr>';
+    $("#more").innerHTML=""; return;
   }
   const lg=v=>v>0?Math.min(100,Math.log10(v+1)/Math.log10(max+1)*100):0;
   $("#tb").insertAdjacentHTML("beforeend",part.map(r=>{
-    const grew=r.value_orig!=null&&r.value!=null&&r.value_orig!==r.value;
+    const grew=r.value_first!=null&&r.value!=null&&r.value_first!==r.value;
     return `<tr>
-    <td class="t-title"><button class="linkbtn" data-id="${esc(r.id)}">${esc(r.title||"(untitled)")}</button>
+    <td class="t-title"><button class="linkbtn" data-cn="${esc(r.cn)}">${esc(r.title||"(untitled)")}</button>
       <div class="t-sub">${esc(r.cn||"")}</div></td>
     <td class="hide-s t-party">${esc(r.buyer||"—")}</td>
     <td class="t-party">${esc(r.supplier||"—")}</td>
-    <td class="num">${money(r.value)}
-      <div class="rule" title="${grew?"Original "+money(r.value_orig):""}">
-        <i style="width:${lg(r.value)}%"></i>
-        ${grew?`<u style="left:${lg(r.value_orig)}%"></u>`:""}</div></td>
+    <td class="num">${money(r.value)}${(r.cur||"AUD")!=="AUD"?" "+esc(r.cur):""}
+      <div class="rule" title="${grew?"First seen at "+money(r.value_first):""}">
+        <i style="width:${lg(r.value)}%"></i>${grew?`<u style="left:${lg(r.value_first)}%"></u>`:""}</div></td>
     <td class="hide-s num">${esc(r.pub||"—")}</td>
     <td>${r._f.map(f=>`<span class="flag" title="${esc(FLAGS[f]||f)}">${esc(f.replace(/_/g," "))}</span>`).join("")}</td>
   </tr>`;}).join(""));
   const left=S.view.length-(S.page+1)*S.PER;
-  $("#more").innerHTML = left>0
-    ? `<button class="btn-p" id="mb">Show ${Math.min(left,S.PER)} more (${left.toLocaleString()} remaining)</button>`
-    : (S.view.length?`<span class="count">End of ${S.view.length.toLocaleString()} results.</span>`:"");
+  $("#more").innerHTML=left>0
+    ?`<button class="btn-p" id="mb">Show ${Math.min(left,S.PER)} more (${left.toLocaleString()} left)</button>`
+    :(S.view.length?`<span class="count">End of ${S.view.length.toLocaleString()} results.</span>`:"");
   const mb=$("#mb"); if(mb) mb.onclick=()=>{S.page++;draw();};
 }
 
+function applySup(){
+  const q=S.q;
+  S.supView=S.sup.filter(s=>{
+    if(S.v1!=null&&!(s.total>=S.v1)) return false;
+    if(S.v2!=null&&!(s.total<=S.v2)) return false;
+    if(S.flags.has("agent_or_trustee")&&!s.agent) return false;
+    if(!q) return true;
+    return (s.abn||"").includes(q)||(s.names||[]).some(n=>n.toLowerCase().includes(q));
+  });
+  S.sPage=0;
+  const tot=S.supView.reduce((n,s)=>n+(s.total||0),0);
+  $("#count").innerHTML=`<b>${S.supView.length.toLocaleString()}</b> suppliers by ABN · `+
+    `<b>${money(tot)}</b> committed`;
+  $("#tbs").innerHTML=""; drawSup();
+}
+function drawSup(){
+  const part=S.supView.slice(S.sPage*S.PER,(S.sPage+1)*S.PER);
+  if(!part.length&&S.sPage===0){
+    $("#tbs").innerHTML='<tr><td colspan="4" class="empty">No suppliers match.</td></tr>';
+    $("#mores").innerHTML=""; return;
+  }
+  $("#tbs").insertAdjacentHTML("beforeend",part.map(s=>{
+    const alt=(s.names||[]).slice(1);
+    return `<tr>
+    <td><button class="linkbtn" data-abn="${esc(s.abn)}">${esc(s.canonical||"(unnamed)")}</button>
+      <div class="t-sub">ABN ${esc(s.abn)}${s.agent?' <span class="flag">agent or trustee</span>':""}</div>
+      ${alt.length?`<div class="alias">also seen as: ${alt.slice(0,3).map(esc).join("; ")}`+
+        `${alt.length>3?` +${alt.length-3} more`:""}</div>`:""}</td>
+    <td class="num">${(s.n||0).toLocaleString()}</td>
+    <td class="hide-s num">${(s.buyers||0).toLocaleString()}</td>
+    <td class="num">${money(s.total)}</td>
+  </tr>`;}).join(""));
+  const left=S.supView.length-(S.sPage+1)*S.PER;
+  $("#mores").innerHTML=left>0?`<button class="btn-p" id="mbs">Show ${Math.min(left,S.PER)} more</button>`:"";
+  const mbs=$("#mbs"); if(mbs) mbs.onclick=()=>{S.sPage++;drawSup();};
+}
+
 document.addEventListener("click",e=>{
-  const b=e.target.closest("button[data-id]"); if(!b) return;
-  const r=S.rows.find(x=>x.id===b.dataset.id); if(!r) return;
+  const sb=e.target.closest("button[data-abn]");
+  if(sb){ switchTab("c"); $("#q").value=sb.dataset.abn; S.q=sb.dataset.abn.toLowerCase(); apply(); return; }
+  const b=e.target.closest("button[data-cn]"); if(!b) return;
+  const r=S.rows.find(x=>x.cn===b.dataset.cn); if(!r) return;
   $("#dlg-t").textContent=r.title||r.cn||"Contract";
   const rows=[["CN number",r.cn],["Agency",r.buyer],["Supplier",r.supplier],
-    ["Supplier ABN",r.abn],["Value",money(r.value)],
-    ["Original value",r.value_orig!=null&&r.value_orig!==r.value?money(r.value_orig):null],
-    ["Amendments",r.amendments||null],["Published",r.pub],["Signed",r.signed],
-    ["Start",r.start],["End",r.end],["Procurement method",r.method],
-    ["UNSPSC category",r.cat]];
-  let h=rows.filter(([,v])=>v!=null&&v!=="")
-    .map(([k,v])=>`<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("");
+    ["Supplier ABN",r.abn],["Value",money(r.value)+((r.cur||"AUD")!=="AUD"?" "+r.cur:"")],
+    ["First seen at",r.value_first!=null&&r.value_first!==r.value?money(r.value_first):null],
+    ["Amendments observed",r.amendments||null],
+    ["Published",r.pub],["Signed",r.signed],["Start",r.start],["End",r.end],
+    ["Procurement method",r.method],["UNSPSC category",r.cat],
+    ["First seen by archive",r.first_seen],["Last seen",r.last_seen]];
+  let h=rows.filter(([,v])=>v!=null&&v!=="").map(([k,v])=>`<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("");
   if(r._f.length) h+="<dt>Flags</dt><dd>"+r._f.map(f=>
     `<div><b>${esc(f.replace(/_/g," "))}</b> — ${esc(FLAGS[f]||"")}</div>`).join("")+"</dd>";
-  if(r.url) h+=`<dt>Source</dt><dd><a href="${esc(r.url)}" target="_blank" rel="noopener">View on AusTender</a></dd>`;
-  $("#dlg-b").innerHTML=h;
-  $("#dlg").showModal();
+  h+=`<dt>Source</dt><dd><a href="${esc(cnUrl(r.cn))}" target="_blank" rel="noopener">View on AusTender</a></dd>`;
+  $("#dlg-b").innerHTML=h; $("#dlg").showModal();
 });
 
 function exportCSV(){
-  const cols=["cn","title","buyer","supplier","abn","value","value_orig","pub",
-              "signed","start","end","method","cat","flags","url"];
-  const q=v=>{const s=String(v??"");return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;};
-  const csv=[cols.join(",")].concat(S.view.map(r=>cols.map(c=>q(r[c])).join(","))).join("\n");
+  const sup=S.tab==="s";
+  const cols=sup?["abn","canonical","names","n","buyers","total"]
+    :["cn","title","buyer","supplier","abn","value","value_first","cur","pub","signed",
+      "start","end","method","cat","amendments","first_seen","last_seen","flags"];
+  const src=sup?S.supView:S.view;
+  const q=v=>{const s=Array.isArray(v)?v.join(" | "):String(v??"");
+    return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;};
+  const body=src.map(r=>cols.map(c=>q(r[c])).join(","));
+  if(!sup) cols.push("url"), body.forEach((_,i)=>body[i]+=","+q(cnUrl(src[i].cn)));
+  const csv=[cols.join(",")].concat(body).join("\n");
   const a=document.createElement("a");
   a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));
-  a.download=`legal-tender-${new Date().toISOString().slice(0,10)}.csv`;
+  a.download=`legal-tender-${sup?"suppliers":"contracts"}-${new Date().toISOString().slice(0,10)}.csv`;
   a.click(); URL.revokeObjectURL(a.href);
 }
 boot();
