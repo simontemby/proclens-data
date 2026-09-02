@@ -379,7 +379,13 @@ const S={idx:null,shards:new Map(),rows:[],view:[],sup:[],supView:[],page:0,sPag
 const $=s=>document.querySelector(s);
 const money=n=>n==null?"—":"$"+Math.round(n).toLocaleString("en-AU");
 const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-const cnUrl=cn=>"https://www.tenders.gov.au/Cn/Show/"+encodeURIComponent(cn);
+/* AusTender's /Cn/Show/ path takes an internal GUID, not the CN number, so
+   /Cn/Show/CN4056445 returns "Object Not Found" — every source link was broken.
+   The advanced search accepts the CN id as a query parameter and is the only
+   addressable route to a notice from its public identifier. */
+const cnUrl=cn=>"https://www.tenders.gov.au/Cn/Search?Keyword=&KeywordTypeSearch=AllWord"+
+  "&CnId="+encodeURIComponent(cn)+"&dateType=Publish+Date&dateStart=&dateEnd="+
+  "&SupplierName=&SupplierAbn=&ValueFrom=&ValueTo=&AtmId=&AgencyRefId=&Consultancy=";
 const MON=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 /* Display only. Stored values remain ISO (YYYY-MM-DD) because sorting and the
    date filter compare them as strings. */
@@ -848,7 +854,7 @@ document.addEventListener("click",e=>{
       `<div>${esc(o[0])} — <b>${money(o[1])}</b></div>`).join("")+
       '<div class="t-sub" style="margin-top:6px">What the contract was reported as '+
       'worth in each period\'s snapshot.</div></dd>';
-  h+=`<dt>Source</dt><dd><a href="${esc(cnUrl(r.cn))}" target="_blank" rel="noopener">View on AusTender</a></dd>`;
+  h+=`<dt>Source</dt><dd><a href="${esc(cnUrl(r.cn))}" target="_blank" rel="noopener">Find on AusTender</a></dd>`;
   $("#dlg-b").innerHTML=h; $("#dlg").showModal();
 });
 
