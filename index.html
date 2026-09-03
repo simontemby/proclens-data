@@ -658,11 +658,14 @@ async function ensureMonths(months){
   rebuild();
 }
 function rebuild(){
-  const months=monthsFor(S.d1,S.d2);
+  // Every shard that has been loaded belongs in the corpus. The date range
+  // decides what to FETCH; filtering is apply()'s job. Building from the range
+  // instead meant a loaded shard outside it was invisible, so searching a 2024
+  // supplier against a three-month default returned nothing at all.
   const byCn=new Map();
   S.rows=[];
-  for(const m of months){
-    const rs=S.shards.get(m); if(!rs) continue;
+  for(const [,rs] of S.shards){
+    if(!rs) continue;
     for(let r of rs){
       const up=S.overlay&&S.overlay.get(r.ocid||r.cn);
       // Object.assign also copies the _p cache marker, which would leave the
@@ -835,14 +838,20 @@ function wire(){
     S.tab==="s"?applySup():apply();},180);};
   $("#agency").onchange=e=>{S.agency=e.target.value;apply();};
   $("#sort").onchange=e=>{S.sort=e.target.value;apply();};
-  const dch=()=>{S.d1=$("#d1").value; S.d2=$("#d2").value; ensureMonths(monthsFor(S.d1,S.d2));};
+  const dch=()=>{
+    S.d1=$("#d1").value; S.d2=$("#d2").value;
+    S.dateTouched=(S.d1!==S.d1def)||(S.d2!==S.d2def);
+    ensureMonths(monthsFor(S.d1,S.d2));
+  };
   $("#d1").onchange=dch; $("#d2").onchange=dch;
   const vch=()=>{const a=parseFloat($("#v1").value),b=parseFloat($("#v2").value);
     S.v1=isNaN(a)?null:a; S.v2=isNaN(b)?null:b; apply();};
   $("#v1").oninput=()=>{clearTimeout(t);t=setTimeout(vch,250);};
   $("#v2").oninput=()=>{clearTimeout(t);t=setTimeout(vch,250);};
   $("#reset").onclick=()=>{
-    S.q="";S.agency="";S.v1=S.v2=null;S.flags.clear();
+    S.q="";S.agency="";S.v1=S.v2=null;S.flags.clear();S.dateTouched=false;
+    S.d1=S.d1def; S.d2=S.d2def;
+    if($("#d1")) $("#d1").value=S.d1; if($("#d2")) $("#d2").value=S.d2;
     $("#q").value="";$("#agency").value="";$("#v1").value="";$("#v2").value="";
     document.querySelectorAll(".chip").forEach(c=>c.setAttribute("aria-pressed","false"));
     S.tab==="s"?applySup():apply();
@@ -915,8 +924,7 @@ async function loadSenate(){
 // The table is noise before anyone has asked anything, so it stays hidden until
 // there is a real query or a filter that differs from the default.
 function hasQuery(){
-  return !!(S.q||S.agency||S.v1!=null||S.v2!=null||S.flags.size||
-            (S.d1&&S.d1!==S.d1def)||(S.d2&&S.d2!==S.d2def));
+  return !!(S.q||S.agency||S.v1!=null||S.v2!=null||S.flags.size||S.dateTouched);
 }
 function showResults(on){
   const l=$("#landing"), r=$("#results");
@@ -937,8 +945,13 @@ function apply(){
       if(!r._h.includes(q)) return false;
     }
     if(S.agency&&r.buyer!==S.agency) return false;
-    if(S.d1&&(r.pub||"")<S.d1) return false;
-    if(S.d2&&(r.pub||"")>S.d2) return false;
+    // Only filter on dates once the user has actually set them. The default
+    // range exists to decide which shards load first, not to hide matches:
+    // searching a 2024 supplier against a three-month default returned zero.
+    if(S.dateTouched){
+      if(S.d1&&(r.pub||"")<S.d1) return false;
+      if(S.d2&&(r.pub||"")>S.d2) return false;
+    }
     if(S.v1!=null&&!(r.value>=S.v1)) return false;
     if(S.v2!=null&&!(r.value<=S.v2)) return false;
     for(const f of S.flags) if(!r._f.includes(f)) return false;
@@ -977,7 +990,7 @@ function draw(){
                 (r.cn||"")+" "+(r.abn||"")).toLowerCase();
         return r._h.includes(S.q);
       }).length;
-      if(wider>0) extra='<div style="margin-top:12px"><b>'+wider.toLocaleString()+
+      if(wider>0&&S.dateTouched) extra='<div style="margin-top:12px"><b>'+wider.toLocaleString()+
         '</b> match'+(wider===1?"":"es")+' outside the current date range.'+
         '<div style="margin-top:10px"><button class="btn-p" id="widen">Search the whole archive</button></div></div>';
       else if(!S.sen) extra='<div class="t-sub" style="margin-top:10px">Still loading the '+
