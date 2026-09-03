@@ -466,6 +466,7 @@ const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&g
    /Cn/Show/CN4056445 returns "Object Not Found" — every source link was broken.
    The advanced search accepts the CN id as a query parameter and is the only
    addressable route to a notice from its public identifier. */
+const todayISO=()=>new Date().toISOString().slice(0,10);
 const cnUrl=cn=>"https://www.tenders.gov.au/Cn/Search?Keyword=&KeywordTypeSearch=AllWord"+
   "&CnId="+encodeURIComponent(cn)+"&dateType=Publish+Date&dateStart=&dateEnd="+
   "&SupplierName=&SupplierAbn=&ValueFrom=&ValueTo=&AtmId=&AgencyRefId=&Consultancy=";
@@ -1015,10 +1016,26 @@ function apply(){
     String(b.pub||"").localeCompare(String(a.pub||"")));
   S.page=0;
   // Only AUD rows are summed; a mixed-currency total would be meaningless.
-  let tot=0,non=0;
-  for(const r of S.view){ if((r.cur||"AUD")==="AUD") tot+=r.value||0; else non++; }
+  // "Committed" is everything ever awarded in this selection. "Still running"
+  // counts only contracts whose end date has not yet passed, which is the live
+  // obligation rather than the historical total. Contracts with no end date are
+  // left out of the running figure rather than guessed at, and counted so the
+  // gap is visible.
+  const today=todayISO();
+  let tot=0,non=0,live=0,liveN=0,noEnd=0;
+  for(const r of S.view){
+    if((r.cur||"AUD")!=="AUD"){ non++; continue; }
+    const v=r.value||0;
+    tot+=v;
+    const e=r.end||"";
+    if(!e) noEnd++;
+    else if(e>=today){ live+=v; liveN++; }
+  }
   $("#count").innerHTML=`<b>${S.view.length.toLocaleString()}</b> of ${S.rows.length.toLocaleString()} loaded `+
-    `· <b>${money(tot)}</b> committed`+(non?` · ${non} non-AUD excluded from total`:"");
+    `· <b>${money(tot)}</b> committed`+
+    ` · <b title="Contracts whose end date has not yet passed">${money(live)}</b> still running`+
+    `<span class="t-sub"> (${liveN.toLocaleString()} contracts${noEnd?`, ${noEnd.toLocaleString()} with no end date`:""})</span>`+
+    (non?` · ${non} non-AUD excluded`:"");
   $("#tb").innerHTML=""; draw(); updateSortIndicator(); filterBadge();
 }
 function draw(){
