@@ -446,28 +446,47 @@ function histUrl(y){
   const s=(S.hidx&&S.hidx.shards||[]).find(x=>x.year===y);
   return `${DATA}historical/contracts-${y}.json?v=${s?`${s.count}-${s.bytes}`:"0"}`;
 }
+/* Six lanes, newest year first, and a rebuild every couple of shards so results
+   appear while the rest arrives. Loading these one after another, blocking, was
+   75 MB of sequential fetches before the page painted anything. */
 async function loadHistYears(years){
-  const need=years.filter(y=>!S.hist.has(y));
+  const need=years.filter(y=>!S.hist.has(y)).sort().reverse();
   if(!need.length) return;
-  const c=$("#count");
-  let done=0;
-  for(const y of need){
-    c.innerHTML=`Loading historical ${y} (${++done} of ${need.length})…`;
-    try{
-      const r=await fetch(histUrl(y),{cache:"force-cache"});
-      if(!r.ok){ S.hist.set(y,[]); continue; }
-      const b=await r.json(), f=b.fields||[], d=b.dict||{};
-      S.hist.set(y,(b.rows||[]).map(row=>{
-        const o={};
-        for(let i=0;i<f.length;i++){
-          const k=f[i]; let v=row[i];
-          if(d[k]!==undefined&&typeof v==="number") v=d[k][v];
-          o[k]=v;
+  const p=$("#prog"); p.hidden=false; p.max=need.length; p.value=0;
+  const c=$("#count"); const was=c.innerHTML;
+  const queue=need.slice(); let done=0;
+  async function lane(){
+    for(;;){
+      const y=queue.shift(); if(!y) return;
+      try{
+        const r=await fetch(histUrl(y),{cache:"force-cache"});
+        if(!r.ok){ S.hist.set(y,[]); }
+        else{
+          const b=await r.json(), f=b.fields||[], d=b.dict||{};
+          S.hist.set(y,(b.rows||[]).map(row=>{
+            const o={};
+            for(let i=0;i<f.length;i++){
+              const k=f[i]; let v=row[i];
+              if(d[k]!==undefined&&typeof v==="number") v=d[k][v];
+              o[k]=v;
+            }
+            return o;
+          }));
         }
-        return o;
-      }));
-    }catch(e){ S.hist.set(y,[]); }
+      }catch(e){ S.hist.set(y,[]); }
+      p.value=++done;
+      c.innerHTML=`Loading historical archive — ${done} of ${need.length} years…`;
+      // rebuild() is ~650ms on a laptop over the full corpus and several times
+      // that on a phone, so repaint early then sparingly rather than per shard.
+      if(done===1||done===3||done%6===0||done===need.length){
+        rebuild();
+        c.innerHTML=done===need.length?was:`Loading historical archive — ${done} of ${need.length} years…`;
+      }
+    }
   }
+  await Promise.all(Array.from({length:Math.min(6,need.length)},lane));
+  p.hidden=true;
+  rebuild();
 }
 function shardUrl(m){
   const s=(S.idx&&S.idx.shards||[]).find(x=>x.month===m);
@@ -515,7 +534,7 @@ async function loadOverlay(){
 async function ensureMonths(months){
   if(S.embedded){ rebuild(); return; }
   await loadOverlay();
-  await loadHistYears(histYearsFor(S.d1,S.d2));
+  loadHistYears(histYearsFor(S.d1,S.d2));   // background: merges on arrival
   const need=months.filter(m=>!S.shards.has(m));
   if(!need.length) return;
   const p=$("#prog"); p.hidden=false; p.max=need.length; p.value=0;
