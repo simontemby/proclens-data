@@ -265,7 +265,20 @@ body.landing #chips,body.landing #csv{display:none}
   border:1px solid color-mix(in srgb,var(--accent) 24%,transparent)}
 footer{border-top:1px solid var(--line);margin-top:32px;padding:20px 0 44px;color:var(--muted);font-size:13px}
 .empty{padding:48px 16px;text-align:center;color:var(--muted)}
-@media(max-width:759px){.hide-s{display:none} .sp{flex-basis:100%;height:0}}
+@media(max-width:759px){
+  .hide-s{display:none}
+  .sp{flex-basis:100%;height:0}
+  /* The title takes its own line, so tabs and actions must share the next one.
+     Four full-width labels wrapped onto a third; the actions become icons with
+     an accessible name, and the tabs tighten. */
+  .head{gap:8px;padding:10px 0}
+  h1{font-size:19px}
+  .tabs{gap:2px;padding:2px}
+  .tab{padding:8px 12px;font-size:12.5px}
+  .iconbtn{padding:8px 11px;min-width:40px;justify-content:center}
+  .iconbtn .lbl{display:none}
+  .iconbtn .ico{font-size:15px;line-height:1}
+}
 
 @media(max-width:759px){
   select,button,input[type=date],input[type=number]{min-height:44px}
@@ -287,8 +300,10 @@ footer{border-top:1px solid var(--line);margin-top:32px;padding:20px 0 44px;colo
       <button class="tab" role="tab" id="tab-c" aria-selected="true">Contracts</button>
       <button class="tab" role="tab" id="tab-s" aria-selected="false">Suppliers</button>
     </div>
-    <button class="iconbtn" id="about">About the data</button>
-    <button class="iconbtn" id="csv">Export CSV</button>
+    <button class="iconbtn" id="about" aria-label="About the data" title="About the data">
+      <span class="ico" aria-hidden="true">ⓘ</span><span class="lbl">About the data</span></button>
+    <button class="iconbtn" id="csv" aria-label="Export CSV" title="Export CSV">
+      <span class="ico" aria-hidden="true">↓</span><span class="lbl">Export CSV</span></button>
   </div>
 </header>
 
@@ -785,15 +800,45 @@ async function boot(){
   fetch(DATA+"historical/unspsc.json",{cache:"no-cache"})
     .then(r=>r.ok?r.json():null)
     .then(j=>{ if(j&&j.codes){ S.unspsc=j.codes; apply(); } }).catch(()=>{});
-  if(emb?.suppliers){ S.sup=emb.suppliers; } else { loadSuppliers(); }
+  if(emb?.suppliers){ S.sup=emb.suppliers; S.supBuiltFrom=-1; }
 }
 
-async function loadSuppliers(){
-  try{
-    const r=await fetch(DATA+"suppliers.json",{cache:"no-cache"});
-    if(r.ok){ S.sup=(await r.json()).suppliers||[]; if(S.tab==="s") applySup(); }
-  }catch(e){}
+/* suppliers.json was precomputed from the AusTender store alone and capped at
+   5,000 entries — the smallest total in it was $1.37m, so Quantexa at $351,230
+   could never appear, and every historical and Senate Order supplier was
+   missing entirely. Rolling up from the loaded corpus instead means the tab
+   always reflects exactly what the search can see, with no cap. */
+function buildSuppliersFromCorpus(){
+  const by=new Map();
+  for(const r of S.rows){
+    const abn=(r.abn||"").trim();
+    const name=(r.supplier||"").trim();
+    if(!abn&&!name) continue;
+    const key=abn||("name:"+name.toLowerCase());
+    let e=by.get(key);
+    if(!e){ e={abn:abn,canonical:name,names:new Map(),n:0,total:0,
+               agent:false,buyers:new Set()}; by.set(key,e); }
+    if(name) e.names.set(name,(e.names.get(name)||0)+1);
+    e.n++;
+    if((r.cur||"AUD")==="AUD"&&r.value) e.total+=r.value;
+    if(r._f&&r._f.indexOf("agent_or_trustee")>=0) e.agent=true;
+    if(r.buyer) e.buyers.add(r.buyer);
+  }
+  const out=[];
+  for(const e of by.values()){
+    const names=[...e.names.entries()].sort((a,b)=>b[1]-a[1]).map(x=>x[0]);
+    out.push({abn:e.abn,canonical:names[0]||e.canonical||"",names,
+              n:e.n,total:Math.round(e.total*100)/100,
+              agent:e.agent,buyers:e.buyers.size});
+  }
+  out.sort((a,b)=>b.total-a.total);
+  S.sup=out; S.supBuiltFrom=S.rows.length;
+  return out;
 }
+
+/* No network call: the roll-up is derived from the corpus already in memory.
+   The precomputed suppliers.json was 2.2 MB fetched on every page load and then
+   thrown away. */
 
 function buildAgencies(){
   const c=new Map();
@@ -1031,8 +1076,10 @@ function draw(){
 }
 
 function applySup(){
+  // Rebuild whenever the corpus has changed, so the tab never lags the search.
+  if(!S.sup||S.supBuiltFrom!==S.rows.length) buildSuppliersFromCorpus();
   const q=S.q;
-  S.supView=S.sup.filter(s=>{
+  S.supView=(S.sup||[]).filter(s=>{
     if(S.v1!=null&&!(s.total>=S.v1)) return false;
     if(S.v2!=null&&!(s.total<=S.v2)) return false;
     if(S.flags.has("agent_or_trustee")&&!s.agent) return false;
