@@ -31,7 +31,7 @@ Two date axes, used for different jobs:
   contractLastModified  — catches amendments, but returns "no records" for
                           windows older than roughly two years. Used weekly.
 """
-import argparse, json, os, re, sys, time
+import argparse, hashlib, json, os, re, sys, time
 from datetime import date, datetime, timedelta, timezone
 from collections import Counter, defaultdict
 
@@ -445,12 +445,14 @@ def save_store(store, base, datadir, changes, meta):
         name = f"contracts-{month}.json"
         path = os.path.join(datadir, name)
         payload = encode_shard(month, rows)
-        if write_json_if_changed(path, payload):
+        written, sha = write_json_if_changed(path, payload)
+        if written:
             rewritten += 1
         total = sum(r["value"] for r in rows
                     if r.get("value") and r.get("cur", "AUD") == "AUD")
         index_shards.append({"month": month, "file": name, "count": len(rows),
-                             "total": round(total, 2), "bytes": os.path.getsize(path)})
+                             "total": round(total, 2), "bytes": os.path.getsize(path),
+                             "sha": sha})
 
     # The overlay: every row that now differs from its base version.
     overlay = [r for key, r in store.items()
@@ -535,18 +537,26 @@ def decode_shard(b):
 
 
 def write_json_if_changed(path, obj):
-    """Write only when the serialised form differs. Returns True if written."""
+    """Write only when the serialised form differs.
+
+    Returns (written, sha) where sha is a short digest of the content that was
+    left on disk. Callers stamp that digest into index.json so a browser can
+    tell one version of a shard from another; a count-and-size stamp cannot,
+    because a value edit that keeps the same number of digits changes neither.
+    """
     blob = json.dumps(obj, separators=(",", ":"))
+    sha = hashlib.sha256(blob.encode()).hexdigest()[:12]
     try:
         with open(path) as fh:
             if fh.read() == blob:
-                return False
+                return False, sha
     except OSError:
         pass
     tmp = path + ".tmp"
     with open(tmp, "w") as fh:
         fh.write(blob)
     os.replace(tmp, path)
+    return True, sha
     return True
 
 

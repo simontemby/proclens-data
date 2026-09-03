@@ -363,20 +363,26 @@ def read_json(path, default=None):
 
 
 def write_json_if_changed(path, obj):
+    """Returns (written, sha). The digest covers everything but `generated`, so
+    it identifies the CONTENT: a rerun that changes only the timestamp keeps the
+    same digest, and the front end keeps serving the shard it already cached."""
     blob = json.dumps(obj, separators=(",", ":"), default=str)
     stable = {k: v for k, v in obj.items() if k != "generated"}
+    sha = hashlib.sha256(
+        json.dumps(stable, separators=(",", ":"), sort_keys=True,
+                   default=str).encode()).hexdigest()[:12]
     try:
         with open(path) as fh:
             old = json.load(fh)
         if {k: v for k, v in old.items() if k != "generated"} == stable:
-            return False
+            return False, sha
     except (OSError, json.JSONDecodeError, AttributeError):
         pass
     tmp = path + ".tmp"
     with open(tmp, "w") as fh:
         fh.write(blob)
     os.replace(tmp, path)
-    return True
+    return True, sha
 
 
 def shard_year(r):
@@ -496,7 +502,7 @@ def main():
     rows_out = finalise(store)
     # One 71 MB file is too much to hand a browser. Sharded by publication year
     # so a date range only pulls the years it needs, and each shard carries the
-    # count and byte size the front end uses to bust its cache.
+    # content digest the front end stamps into the URL to bust its cache.
     by_year = defaultdict(list)
     for r in rows_out:
         by_year[shard_year(r)].append(r)
@@ -506,10 +512,10 @@ def main():
         dicts, encoded = encode(rows)
         name = f"contracts-{year}.json"
         path = os.path.join(args.out, name)
-        write_json_if_changed(path, {"year": year, "fields": FIELDS,
-                                     "dict": dicts, "rows": encoded})
+        _, sha = write_json_if_changed(path, {"year": year, "fields": FIELDS,
+                                              "dict": dicts, "rows": encoded})
         shards.append({"year": year, "file": name, "count": len(rows),
-                       "bytes": os.path.getsize(path)})
+                       "bytes": os.path.getsize(path), "sha": sha})
     stale = os.path.join(args.out, "contracts.json")
     if shards and os.path.exists(stale):
         os.remove(stale)
