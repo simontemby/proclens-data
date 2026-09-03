@@ -251,6 +251,10 @@ dialog#dlg::backdrop,dialog#aboutDlg::backdrop{background:rgba(6,12,16,.55);back
 @media(max-width:480px){.kv{grid-template-columns:1fr}.kv dt{font-size:11.5px;text-transform:uppercase;
   letter-spacing:.05em;font-weight:700;margin-top:6px}}
 
+/* Before anyone has asked anything, only the search field and the date range
+   are useful. The rest appears with the results. */
+body.landing #grp-value,body.landing #agency,body.landing #sort,
+body.landing #chips,body.landing #csv{display:none}
 .hero{max-width:640px;margin:9vh auto 12vh;text-align:center}
 .hero h2{font-size:clamp(24px,4vw,34px);line-height:1.2;margin:0 0 12px;letter-spacing:-.03em;
   background:linear-gradient(100deg,var(--ink),color-mix(in srgb,var(--accent) 72%,var(--ink)));
@@ -270,7 +274,7 @@ footer{border-top:1px solid var(--line);margin-top:32px;padding:20px 0 44px;colo
 }
 </style>
 </head>
-<body>
+<body class="landing">
 <a class="skip" href="#results">Skip to results</a>
 
 <div class="appbar">
@@ -313,7 +317,7 @@ footer{border-top:1px solid var(--line);margin-top:32px;padding:20px 0 44px;colo
       <label for="d1">Published</label>
       <input id="d1" type="date"> <span aria-hidden="true">→</span> <input id="d2" type="date">
     </div>
-    <div class="grp">
+    <div class="grp" id="grp-value">
       <label for="v1">Value $</label>
       <input id="v1" type="number" placeholder="min" min="0" step="1000">
       <span aria-hidden="true">→</span>
@@ -328,7 +332,9 @@ footer{border-top:1px solid var(--line);margin-top:32px;padding:20px 0 44px;colo
       <option value="value">Largest value</option>
       <option value="value_asc">Smallest value</option>
       <option value="start">Start date (latest)</option>
+      <option value="start_asc">Start date (earliest)</option>
       <option value="end">End date (soonest)</option>
+      <option value="end_desc">End date (latest)</option>
       <option value="growth">Most observed growth</option>
     </select>
     <div class="chiprow" id="chips" role="group" aria-label="Filter by review flag"></div>
@@ -916,6 +922,7 @@ function showResults(on){
   const l=$("#landing"), r=$("#results");
   if(l) l.hidden=!!on;
   if(r) r.hidden=!on;
+  document.body.classList.toggle("landing",!on);
 }
 function apply(){
   if(S.tab==="s") return applySup();
