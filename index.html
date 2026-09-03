@@ -8,33 +8,48 @@
 <meta name="color-scheme" content="light dark">
 <style>
 :root{
-  --paper:#f5f6f8; --card:#fff; --ink:#12151c; --muted:#566072;
-  --line:#e3e6ea; --line-ui:#7e8798;
-  --accent:#1b3a6b; --accent-ink:#fff; --accent-soft:#e7edf7;
-  --amber-ink:#7a5b12; --amber-bg:#f3ecd5;
-  --band:#eef0f3; --shadow:0 1px 2px rgba(20,24,33,.06),0 6px 20px rgba(20,24,33,.06);
-  --r:10px; --rs:6px;
+  /* Deep teal ink on warm paper. Contrast checked: ink/paper 15.8:1,
+     muted/paper 5.4:1, accent/paper 6.9:1, accent-ink/accent 9.2:1 — all AA. */
+  --paper:#eef1f4; --paper-2:#e4e9ee; --card:#fff; --ink:#0f1720; --muted:#53616f;
+  --line:#dfe5ea; --line-ui:#9aa6b2;
+  --accent:#0d5c63; --accent-2:#12868f; --accent-ink:#fff; --accent-soft:#e0f0f1;
+  --amber-ink:#7a5b12; --amber-bg:#f6eeda;
+  --band:#f3f6f8;
+  --shadow:0 1px 2px rgba(15,23,32,.05),0 8px 24px -8px rgba(15,23,32,.14);
+  --shadow-lg:0 2px 4px rgba(15,23,32,.06),0 24px 48px -16px rgba(15,23,32,.22);
+  --glass:rgba(255,255,255,.72); --glass-line:rgba(255,255,255,.6);
+  --r:12px; --rs:8px;
   --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
   --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,system-ui,sans-serif;
 }
 @media(prefers-color-scheme:dark){:root:not([data-theme="light"]){
-  --paper:#0f1115; --card:#171a20; --ink:#e7e9ee; --muted:#a3abbb;
-  --line:#262b33; --line-ui:#626b7d;
-  --accent:#7ba0e0; --accent-ink:#0f1115; --accent-soft:#1c2740;
-  --amber-ink:#e0c168; --amber-bg:#2c2513;
-  --band:#14171d; --shadow:0 1px 2px rgba(0,0,0,.4),0 6px 20px rgba(0,0,0,.35);
+  --paper:#0b0f13; --paper-2:#0f151b; --card:#141b22; --ink:#e6ecf2; --muted:#93a3b2;
+  --line:#1f2a33; --line-ui:#54646f;
+  --accent:#4fd1c5; --accent-2:#2bb3ae; --accent-ink:#08131a; --accent-soft:#0f2c2e;
+  --amber-ink:#e6c66d; --amber-bg:#2a2413;
+  --band:#111820;
+  --shadow:0 1px 2px rgba(0,0,0,.5),0 10px 30px -10px rgba(0,0,0,.6);
+  --shadow-lg:0 2px 6px rgba(0,0,0,.5),0 28px 56px -20px rgba(0,0,0,.75);
+  --glass:rgba(20,27,34,.7); --glass-line:rgba(255,255,255,.07);
 }}
 :root[data-theme="dark"]{
-  --paper:#0f1115; --card:#171a20; --ink:#e7e9ee; --muted:#a3abbb;
-  --line:#262b33; --line-ui:#626b7d;
-  --accent:#7ba0e0; --accent-ink:#0f1115; --accent-soft:#1c2740;
-  --amber-ink:#e0c168; --amber-bg:#2c2513;
-  --band:#14171d; --shadow:0 1px 2px rgba(0,0,0,.4),0 6px 20px rgba(0,0,0,.35);
+  --paper:#0b0f13; --paper-2:#0f151b; --card:#141b22; --ink:#e6ecf2; --muted:#93a3b2;
+  --line:#1f2a33; --line-ui:#54646f;
+  --accent:#4fd1c5; --accent-2:#2bb3ae; --accent-ink:#08131a; --accent-soft:#0f2c2e;
+  --amber-ink:#e6c66d; --amber-bg:#2a2413;
+  --band:#111820;
+  --shadow:0 1px 2px rgba(0,0,0,.5),0 10px 30px -10px rgba(0,0,0,.6);
+  --shadow-lg:0 2px 6px rgba(0,0,0,.5),0 28px 56px -20px rgba(0,0,0,.75);
+  --glass:rgba(20,27,34,.7); --glass-line:rgba(255,255,255,.07);
 }
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
-body{margin:0;background:var(--paper);color:var(--ink);font:15px/1.5 var(--sans);
-  -webkit-font-smoothing:antialiased}
+body{margin:0;color:var(--ink);font:15px/1.5 var(--sans);-webkit-font-smoothing:antialiased;
+  background:
+    radial-gradient(1100px 520px at 12% -8%, color-mix(in srgb, var(--accent) 13%, transparent), transparent 60%),
+    radial-gradient(900px 460px at 92% 0%, color-mix(in srgb, var(--accent-2) 10%, transparent), transparent 62%),
+    linear-gradient(180deg, var(--paper) 0%, var(--paper-2) 100%);
+  background-attachment:fixed}
 .wrap{max-width:1280px;margin:0 auto;padding:0 16px}
 a{color:var(--accent)}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
@@ -45,36 +60,48 @@ a{color:var(--accent)}
 button,select,input{font-family:var(--sans);color:var(--ink)}
 
 /* ---------- app bar (sticky): header + toolbar travel together ---------- */
-.appbar{position:sticky;top:0;z-index:40;background:var(--paper);
-  box-shadow:0 1px 0 var(--line)}
-header{background:var(--card);border-bottom:1px solid var(--line)}
+.appbar{position:sticky;top:0;z-index:40;
+  background:color-mix(in srgb, var(--paper) 72%, transparent);
+  backdrop-filter:saturate(1.6) blur(14px);-webkit-backdrop-filter:saturate(1.6) blur(14px);
+  border-bottom:1px solid var(--line)}
+@supports not (backdrop-filter:blur(2px)){.appbar{background:var(--paper)}}
+header{background:transparent}
 .head{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center;padding:12px 0}
-h1{font-size:22px;margin:0;letter-spacing:-.02em;font-weight:750}
-h1 .co{color:var(--accent)}
+h1{font-size:22px;margin:0;letter-spacing:-.025em;font-weight:750;
+  background:linear-gradient(100deg,var(--ink),color-mix(in srgb,var(--accent) 78%,var(--ink)));
+  -webkit-background-clip:text;background-clip:text;color:transparent}
+h1 .co{-webkit-text-fill-color:var(--accent-2);color:var(--accent-2)}
 .tag{color:var(--muted);font-size:13px;margin:0}
 .sp{flex:1}
 .tabs{display:flex;gap:4px;background:var(--band);padding:3px;border-radius:var(--r)}
 .tab{font:600 13px var(--sans);padding:8px 14px;min-height:38px;border:0;background:transparent;
   color:var(--muted);cursor:pointer;border-radius:var(--rs)}
-.tab[aria-selected=true]{background:var(--card);color:var(--ink);box-shadow:var(--shadow)}
+.tab[aria-selected=true]{background:var(--card);color:var(--accent);box-shadow:var(--shadow)}
 .iconbtn{display:inline-flex;align-items:center;gap:6px;font:600 13px var(--sans);
   padding:8px 12px;min-height:38px;border:1px solid var(--line-ui);border-radius:var(--rs);
   background:var(--card);color:var(--ink);cursor:pointer}
 .iconbtn:hover{border-color:var(--accent);color:var(--accent)}
 
-.tools{background:var(--paper);border-bottom:1px solid var(--line);padding:10px 0}
-.searchrow{display:flex;gap:8px;align-items:stretch}
-#q{flex:1;min-width:0;font:16px var(--sans);padding:11px 12px;
-  border:1px solid var(--line-ui);border-radius:var(--rs);background:var(--card);color:var(--ink)}
+.tools{background:transparent;padding:12px 0 18px}
+.searchrow{display:flex;gap:10px;align-items:stretch;margin-bottom:6px}
+#q{flex:1;min-width:0;font:16px var(--sans);padding:13px 15px;
+  border:1px solid var(--line-ui);border-radius:var(--r);
+  background:var(--glass);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+  color:var(--ink);box-shadow:var(--shadow);transition:border-color .15s,box-shadow .15s}
+#q:focus{border-color:var(--accent);
+  box-shadow:0 0 0 4px color-mix(in srgb,var(--accent) 16%,transparent),var(--shadow)}
 #q::placeholder{color:var(--muted)}
 select,button,input[type=date],input[type=number]{font:14px var(--sans);padding:9px 10px;
   border:1px solid var(--line-ui);border-radius:var(--rs);background:var(--card);color:var(--ink)}
 button,select{cursor:pointer}
 button:hover,select:hover{border-color:var(--accent)}
-.btn-p{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:700}
-.btn-p:hover{filter:brightness(1.08);border-color:var(--accent)}
-.grp{display:flex;gap:6px;align-items:center;flex-wrap:wrap;
-  border:1px solid var(--line-ui);border-radius:var(--rs);padding:6px 10px;background:var(--card)}
+.btn-p{background:linear-gradient(180deg,var(--accent-2),var(--accent));
+  color:var(--accent-ink);border-color:transparent;font-weight:700;box-shadow:var(--shadow)}
+.btn-p:hover{filter:brightness(1.06)}
+.grp{display:flex;gap:8px;align-items:center;flex-wrap:wrap;
+  border:1px solid var(--line-ui);border-radius:var(--r);padding:9px 12px;
+  background:var(--glass);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+  box-shadow:var(--shadow)}
 .grp label{font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;font-weight:600}
 .grp input[type=date]{border:none;padding:3px;background:transparent;min-width:118px;color:var(--ink)}
 .grp input[type=number]{border:none;padding:3px;background:transparent;width:96px;
@@ -144,7 +171,9 @@ dialog#filterSheet::backdrop{background:rgba(10,12,16,.5)}
 
 /* ---------- results: real table ≥760px, stacked cards below ---------- */
 table{width:100%;border-collapse:collapse;font-size:14px}
-.tw{background:var(--card)}
+.tw{background:var(--glass);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+  border:1px solid var(--glass-line);border-radius:var(--r);box-shadow:var(--shadow);overflow:hidden}
+@supports not (backdrop-filter:blur(2px)){.tw{background:var(--card)}}
 caption{text-align:left}
 th{text-align:left;font-size:11.5px;text-transform:uppercase;letter-spacing:.06em;
   color:var(--muted);padding:10px;border-bottom:1px solid var(--line);
@@ -206,9 +235,9 @@ progress[hidden]{display:none}
   th.hide-m,td.hide-m{display:table-cell}
 }
 
-dialog#dlg{border:1px solid var(--line-ui);border-radius:var(--r);padding:0;max-width:660px;width:92vw;
-  background:var(--card);color:var(--ink)}
-dialog#dlg::backdrop{background:rgba(10,12,16,.5)}
+dialog#dlg,dialog#aboutDlg{border:1px solid var(--glass-line);border-radius:16px;padding:0;
+  max-width:660px;width:92vw;background:var(--card);color:var(--ink);box-shadow:var(--shadow-lg)}
+dialog#dlg::backdrop,dialog#aboutDlg::backdrop{background:rgba(6,12,16,.55);backdrop-filter:blur(3px)}
 @media(max-width:759px){
   dialog#dlg{position:fixed;inset:auto 0 0 0;width:100%;max-width:none;max-height:88vh;
     border-radius:16px 16px 0 0;border-width:1px 0 0 0}
@@ -222,6 +251,14 @@ dialog#dlg::backdrop{background:rgba(10,12,16,.5)}
 @media(max-width:480px){.kv{grid-template-columns:1fr}.kv dt{font-size:11.5px;text-transform:uppercase;
   letter-spacing:.05em;font-weight:700;margin-top:6px}}
 
+.hero{max-width:640px;margin:9vh auto 12vh;text-align:center}
+.hero h2{font-size:clamp(24px,4vw,34px);line-height:1.2;margin:0 0 12px;letter-spacing:-.03em;
+  background:linear-gradient(100deg,var(--ink),color-mix(in srgb,var(--accent) 72%,var(--ink)));
+  -webkit-background-clip:text;background-clip:text;color:transparent}
+.herosub{color:var(--muted);font-size:16px;margin:0 0 22px}
+.herohint{display:inline-block;color:var(--accent);font-size:13.5px;font-weight:600;
+  padding:9px 16px;border-radius:999px;background:var(--accent-soft);
+  border:1px solid color-mix(in srgb,var(--accent) 24%,transparent)}
 footer{border-top:1px solid var(--line);margin-top:32px;padding:20px 0 44px;color:var(--muted);font-size:13px}
 .empty{padding:48px 16px;text-align:center;color:var(--muted)}
 @media(max-width:759px){.hide-s{display:none} .sp{flex-basis:100%;height:0}}
@@ -246,6 +283,7 @@ footer{border-top:1px solid var(--line);margin-top:32px;padding:20px 0 44px;colo
       <button class="tab" role="tab" id="tab-c" aria-selected="true">Contracts</button>
       <button class="tab" role="tab" id="tab-s" aria-selected="false">Suppliers</button>
     </div>
+    <button class="iconbtn" id="about">About the data</button>
     <button class="iconbtn" id="csv">Export CSV</button>
   </div>
 </header>
@@ -302,9 +340,18 @@ footer{border-top:1px solid var(--line);margin-top:32px;padding:20px 0 44px;colo
 </dialog>
 </div>
 
-<main class="wrap" id="results">
-  <div class="note" id="scopenote"></div>
-  <div class="note warn" id="truthnote"></div>
+<section class="wrap" id="landing">
+  <div class="hero">
+    <h2>Search Australian Commonwealth contracts</h2>
+    <p class="herosub">Contract notices, Senate Order snapshots and the historical
+      extracts, searchable together.</p>
+    <p class="herohint">Type above, or set a date range, to begin.</p>
+  </div>
+</section>
+
+<main class="wrap" id="results" hidden>
+  <div id="scopenote" hidden></div>
+  <div id="truthnote" hidden></div>
 
   <section id="pane-c">
     <div class="tw">
@@ -346,6 +393,12 @@ footer{border-top:1px solid var(--line);margin-top:32px;padding:20px 0 44px;colo
   </section>
 
 </main>
+
+<dialog id="aboutDlg" aria-labelledby="about-t">
+  <div class="dh"><strong id="about-t">About this archive</strong>
+    <button class="closex" id="aboutX" aria-label="Close">✕</button></div>
+  <div class="db" id="about-b"></div>
+</dialog>
 
 <dialog id="dlg" aria-labelledby="dlg-t">
   <div class="dh"><strong id="dlg-t">Contract</strong>
@@ -685,6 +738,7 @@ async function boot(){
   const recent=all.slice(-3);
   S.d1=(recent[0]||cov.from||"")+"-01";
   S.d2=cov.to||"";
+  S.d1def=S.d1; S.d2def=S.d2;   // untouched defaults, so a real filter is detectable
   $("#d1").value=S.d1; $("#d2").value=S.d2;
   $("#d1").min=$("#d2").min=(all[0]||"")+"-01"; $("#d1").max=$("#d2").max=cov.to||"";
 
@@ -787,10 +841,27 @@ function wire(){
     document.querySelectorAll(".chip").forEach(c=>c.setAttribute("aria-pressed","false"));
     S.tab==="s"?applySup():apply();
   };
+  // Clicking a header used to assign the same sort value every time, so it only
+  // ever did anything on the first click. Each column now flips its direction.
   document.querySelectorAll("th button[data-s]").forEach(b=>{
-    b.onclick=()=>{S.sort=b.dataset.s;$("#sort").value=S.sort;apply();};
+    b.onclick=()=>{
+      const pair={value:["value","value_asc"],pub:["pub","pub_asc"],
+                  start:["start","start_asc"],end:["end","end_desc"]}[b.dataset.s];
+      S.sort = !pair ? b.dataset.s : (S.sort===pair[0] ? pair[1] : pair[0]);
+      const sel=$("#sort");
+      if(sel&&[...sel.options].some(o=>o.value===S.sort)) sel.value=S.sort;
+      apply();
+    };
   });
   $("#csv").onclick=exportCSV;
+  // The two standing notes are worth keeping but not worth the top of the page.
+  $("#about").onclick=()=>{
+    $("#about-b").innerHTML=
+      `<div class="note">${$("#scopenote").innerHTML}</div>`+
+      `<div class="note warn">${$("#truthnote").innerHTML}</div>`;
+    $("#aboutDlg").showModal();
+  };
+  $("#aboutX").onclick=()=>$("#aboutDlg").close();
   $("#tab-c").onclick=()=>switchTab("c");
   $("#tab-s").onclick=()=>switchTab("s");
   const sheet=$("#filterSheet");
@@ -801,6 +872,7 @@ function wire(){
 }
 function switchTab(t){
   S.tab=t;
+  if(t==="s") showResults(true);
   for(const k of ["c","s"]){
     $("#tab-"+k).setAttribute("aria-selected",String(t===k));
     $("#pane-"+k).hidden=t!==k;
@@ -834,8 +906,20 @@ async function loadSenate(){
   rebuild();
 }
 
+// The table is noise before anyone has asked anything, so it stays hidden until
+// there is a real query or a filter that differs from the default.
+function hasQuery(){
+  return !!(S.q||S.agency||S.v1!=null||S.v2!=null||S.flags.size||
+            (S.d1&&S.d1!==S.d1def)||(S.d2&&S.d2!==S.d2def));
+}
+function showResults(on){
+  const l=$("#landing"), r=$("#results");
+  if(l) l.hidden=!!on;
+  if(r) r.hidden=!on;
+}
 function apply(){
   if(S.tab==="s") return applySup();
+  showResults(hasQuery());
   const q=S.q;
   S.view=S.rows.filter(r=>{
     // Built on first search only, then cached on the row.
@@ -860,7 +944,9 @@ function apply(){
     s==="growth"?b._g-a._g:
     s==="pub_asc"?String(a.pub||"").localeCompare(String(b.pub||"")):
     s==="start"?String(b.start||"").localeCompare(String(a.start||"")):
+    s==="start_asc"?String(a.start||"9999").localeCompare(String(b.start||"9999")):
     s==="end"?String(a.end||"9999").localeCompare(String(b.end||"9999")):
+    s==="end_desc"?String(b.end||"").localeCompare(String(a.end||"")):
     String(b.pub||"").localeCompare(String(a.pub||"")));
   S.page=0;
   // Only AUD rows are summed; a mixed-currency total would be meaningless.
