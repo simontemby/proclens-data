@@ -379,7 +379,29 @@ def write_json_if_changed(path, obj):
     return True
 
 
-def load_store(path):
+def shard_year(r):
+    p = r.get("pub") or r.get("start") or ""
+    return p[:4] if len(p) >= 4 and p[:4].isdigit() else "unknown"
+
+
+def load_store(outdir):
+    """Read every year shard back into one CN-keyed store."""
+    store = {}
+    if not os.path.isdir(outdir):
+        return store
+    for name in sorted(os.listdir(outdir)):
+        if name.startswith("contracts-") and name.endswith(".json"):
+            store.update(_load_one(os.path.join(outdir, name)))
+    # Migration path: an earlier build wrote a single contracts.json. Read it so
+    # a change of layout never silently orphans an already-ingested store —
+    # sources are hash-skipped on a re-run, so nothing would rebuild it.
+    legacy = os.path.join(outdir, "contracts.json")
+    if os.path.exists(legacy):
+        store.update(_load_one(legacy))
+    return store
+
+
+def _load_one(path):
     b = read_json(path, {})
     fields = b.get("fields", FIELDS)
     dicts = b.get("dict") or {}
@@ -427,9 +449,8 @@ def main():
     args = ap.parse_args()
     os.makedirs(args.out, exist_ok=True)
 
-    store_path = os.path.join(args.out, "contracts.json")
     index_path = os.path.join(args.out, "index.json")
-    store = load_store(store_path)
+    store = load_store(args.out)
     index = read_json(index_path, {})
     done = {s["sha"]: s for s in index.get("sources", [])}
     print(f"Store holds {len(store):,} contracts from "
@@ -473,10 +494,25 @@ def main():
               file=sys.stderr)
 
     rows_out = finalise(store)
-    dicts, encoded = encode(rows_out)
-    write_json_if_changed(store_path, {
-        "generated": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-        "fields": FIELDS, "dict": dicts, "rows": encoded})
+    # One 71 MB file is too much to hand a browser. Sharded by publication year
+    # so a date range only pulls the years it needs, and each shard carries the
+    # count and byte size the front end uses to bust its cache.
+    by_year = defaultdict(list)
+    for r in rows_out:
+        by_year[shard_year(r)].append(r)
+    shards = []
+    for year in sorted(by_year):
+        rows = by_year[year]
+        dicts, encoded = encode(rows)
+        name = f"contracts-{year}.json"
+        path = os.path.join(args.out, name)
+        write_json_if_changed(path, {"year": year, "fields": FIELDS,
+                                     "dict": dicts, "rows": encoded})
+        shards.append({"year": year, "file": name, "count": len(rows),
+                       "bytes": os.path.getsize(path)})
+    stale = os.path.join(args.out, "contracts.json")
+    if shards and os.path.exists(stale):
+        os.remove(stale)
 
     with_am = sum(1 for r in rows_out if r.get("amendments"))
     with_son = sum(1 for r in rows_out if r.get("son"))
@@ -490,6 +526,8 @@ def main():
                 "titles, none of which the live OCDS API exposes. Coverage ends "
                 "at 2020.",
         "sources": sources,
+        "fields": FIELDS,
+        "shards": shards,
         "totals": {"contracts": len(rows_out), "with_amendments": with_am,
                    "with_son_id": with_son, "with_atm_id": with_atm},
     })

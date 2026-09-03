@@ -374,10 +374,18 @@ const FLAGS={
   platform_or_reseller:"A platform, marketplace or reseller — the supplier named is the channel, not necessarily the capability bought"
 };
 const DATA="./data/";
-const S={idx:null,shards:new Map(),rows:[],view:[],sup:[],supView:[],page:0,sPage:0,PER:100,
+const S={idx:null,hidx:null,hist:new Map(),shards:new Map(),rows:[],view:[],sup:[],supView:[],page:0,sPage:0,PER:100,
   q:"",agency:"",sort:"pub",flags:new Set(),d1:"",d2:"",v1:null,v2:null,tab:"c"};
 const $=s=>document.querySelector(s);
 const money=n=>n==null?"—":"$"+Math.round(n).toLocaleString("en-AU");
+function catLabel(c){
+  const v=String(c==null?"":c).trim();
+  if(!v) return "";
+  if(!/^\d+$/.test(v)) return v;                 // already a title
+  const m=S.unspsc||{};
+  // UNSPSC nests: fall back to the family and segment codes.
+  return m[v]||m[v.slice(0,6)+"00"]||m[v.slice(0,4)+"0000"]||m[v.slice(0,2)+"000000"]||v;
+}
 const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 /* AusTender's /Cn/Show/ path takes an internal GUID, not the CN number, so
    /Cn/Show/CN4056445 returns "Object Not Found" — every source link was broken.
@@ -421,6 +429,46 @@ function expand(sh){
    pinned to a stale copy that no reload would clear. Stamping the URL with the
    shard's own count and byte size from index.json makes a changed shard a
    different URL, while an unchanged one still serves straight from cache. */
+/* The historical extracts (1999-2020) are a third source, sharded by year and
+   fetched only when the date range reaches back into them — so the default
+   recent view never pays for 72 MB. They carry SON ids, ATM ids, panel flags
+   and amendment lineage that no live feed publishes. */
+function histYearsFor(d1,d2){
+  if(!S.hidx) return [];
+  return (S.hidx.shards||[]).map(x=>x.year).filter(y=>{
+    if(y==="unknown") return false;
+    if(d1&&y<d1.slice(0,4)) return false;
+    if(d2&&y>d2.slice(0,4)) return false;
+    return true;
+  });
+}
+function histUrl(y){
+  const s=(S.hidx&&S.hidx.shards||[]).find(x=>x.year===y);
+  return `${DATA}historical/contracts-${y}.json?v=${s?`${s.count}-${s.bytes}`:"0"}`;
+}
+async function loadHistYears(years){
+  const need=years.filter(y=>!S.hist.has(y));
+  if(!need.length) return;
+  const c=$("#count");
+  let done=0;
+  for(const y of need){
+    c.innerHTML=`Loading historical ${y} (${++done} of ${need.length})…`;
+    try{
+      const r=await fetch(histUrl(y),{cache:"force-cache"});
+      if(!r.ok){ S.hist.set(y,[]); continue; }
+      const b=await r.json(), f=b.fields||[], d=b.dict||{};
+      S.hist.set(y,(b.rows||[]).map(row=>{
+        const o={};
+        for(let i=0;i<f.length;i++){
+          const k=f[i]; let v=row[i];
+          if(d[k]!==undefined&&typeof v==="number") v=d[k][v];
+          o[k]=v;
+        }
+        return o;
+      }));
+    }catch(e){ S.hist.set(y,[]); }
+  }
+}
 function shardUrl(m){
   const s=(S.idx&&S.idx.shards||[]).find(x=>x.month===m);
   const v=s?`${s.count}-${s.bytes}`:"0";
@@ -467,6 +515,7 @@ async function loadOverlay(){
 async function ensureMonths(months){
   if(S.embedded){ rebuild(); return; }
   await loadOverlay();
+  await loadHistYears(histYearsFor(S.d1,S.d2));
   const need=months.filter(m=>!S.shards.has(m));
   if(!need.length) return;
   const p=$("#prog"); p.hidden=false; p.max=need.length; p.value=0;
@@ -511,6 +560,23 @@ function rebuild(){
       }
       r.src="austender";
       byCn.set(r.cn,r);
+    }
+  }
+  for(const [,rows] of (S.hist||new Map())){
+    for(const h of rows){
+      const ex=byCn.get(h.cn);
+      const extra={son:h.son, atm:h.atm, panel:h.panel, consult:h.consult,
+                   consult_reason:h.consult_reason, hist_amendments:h.amendments,
+                   hist_years:h.years};
+      if(ex){ Object.assign(ex,extra); ex.src=ex.src==="senate"?"senate+historical":"both"; ex._h=undefined; }
+      else byCn.set(h.cn,Object.assign({
+        cn:h.cn, title:h.title, buyer:h.agency, supplier:h.supplier, abn:h.abn,
+        value:h.value, value_first:h.value_first, cur:"AUD",
+        pub:h.pub, start:h.start, end:h.end, cat:h.cat, method:h.method,
+        conf_contract:h.conf, conf_reason:h.conf_reason,
+        agency_ref:h.agency_ref, flags:"", src:"historical",
+        _f:[], _g:(h.value&&h.value_first&&h.value_first>0)?(h.value/h.value_first-1):0, _p:1
+      },extra));
     }
   }
   // Merge, do not append. A CN present in both sources is one contract: the
@@ -587,6 +653,13 @@ async function boot(){
   }
   await ensureMonths(monthsFor(S.d1,S.d2));
   loadSenate();   // background: merges into the same corpus when it arrives
+  fetch(DATA+"historical/index.json",{cache:"no-cache"})
+    .then(r=>r.ok?r.json():null).then(j=>{ if(j){ S.hidx=j; } }).catch(()=>{});
+  // AusTender publishes the category as a bare UNSPSC number; the codeset turns
+  // "43200000" into words. Historical rows already carry the title.
+  fetch(DATA+"historical/unspsc.json",{cache:"no-cache"})
+    .then(r=>r.ok?r.json():null)
+    .then(j=>{ if(j&&j.codes){ S.unspsc=j.codes; apply(); } }).catch(()=>{});
   if(emb?.suppliers){ S.sup=emb.suppliers; } else { loadSuppliers(); }
 }
 
@@ -838,11 +911,15 @@ document.addEventListener("click",e=>{
     ["Amendments observed",r.amendments||null],
     ["Published",fmtDMY(r.pub)],["Signed",fmtDMY(r.signed)],
     ["Start",fmtDMY(r.start)],["End",fmtDMY(r.end)],
-    ["Procurement method",r.method],["UNSPSC category",r.cat],
+    ["Procurement method",r.method],
+    ["Category",catLabel(r.cat)+(/^\d+$/.test(String(r.cat||""))?` (UNSPSC ${esc(r.cat)})`:"")],
     ["First seen by archive",fmtDMY(r.first_seen)],["Last seen",fmtDMY(r.last_seen)],
     ["Confidentiality — contract",r.conf_contract],["Reason",r.conf_reason],
     ["Confidentiality — outputs",r.conf_outputs],["Reason (outputs)",r.conf_out_reason],
     ["Reporting periods",(r.periods||[]).join(", ")],
+    ["Standing offer (SON)",r.son],["Approach to market (ATM)",r.atm],
+    ["Panel arrangement",r.panel],["Consultancy",r.consult],
+    ["Consultancy reason",r.consult_reason],
     ["Also in",r.src==="both"?"AusTender API and Senate Order snapshots"
       :r.src==="senate"?"Senate Order snapshots only":null]];
   let h=rows.filter(([,v])=>v!=null&&v!=="").map(([k,v])=>`<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("");
@@ -854,6 +931,13 @@ document.addEventListener("click",e=>{
       `<div>${esc(o[0])} — <b>${money(o[1])}</b></div>`).join("")+
       '<div class="t-sub" style="margin-top:6px">What the contract was reported as '+
       'worth in each period\'s snapshot.</div></dd>';
+  if((r.hist_amendments||[]).length)
+    h+="<dt>Amendment history</dt><dd>"+r.hist_amendments.map(a=>
+      `<div>${esc(fmtDMY(a[1]))} — <b>${a[2]!=null?money(a[2]):"?"}</b>`+
+      `${a[3]!=null?` (total ${money(a[3])})`:""}`+
+      `${a[4]?`<div class="t-sub">${esc(a[4])}</div>`:""}</div>`).join("")+
+      '<div class="t-sub" style="margin-top:6px">From the published historical '+
+      'extracts. Cumulative totals are shown only where the source published them.</div></dd>';
   h+=`<dt>Source</dt><dd><a href="${esc(cnUrl(r.cn))}" target="_blank" rel="noopener">Find on AusTender</a></dd>`;
   $("#dlg-b").innerHTML=h; $("#dlg").showModal();
 });

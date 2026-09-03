@@ -1,0 +1,58 @@
+name: Historical extracts
+
+# The Department of Finance historical CN extracts cover 1999-2020 and do not
+# change, so this exists to pick up a corrected or added resource rather than to
+# poll. Content-hashed, so a run that finds nothing new writes nothing.
+on:
+  schedule:
+    - cron: "0 19 8 * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: archive-write
+  cancel-in-progress: false
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Refuse to run alongside another archive writer
+        id: guard
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          busy=0
+          for wf in refresh.yml backfill-resume.yml senate.yml so13.yml; do
+            n=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow "$wf" \
+                  --status in_progress --json databaseId --jq 'length' 2>/dev/null || echo 0)
+            busy=$((busy + n))
+          done
+          echo "other archive writers in flight: $busy"
+          [ "$busy" -gt 0 ] && echo "skip=true" >> $GITHUB_OUTPUT || echo "skip=false" >> $GITHUB_OUTPUT
+
+      - uses: actions/checkout@v5
+        if: steps.guard.outputs.skip != 'true'
+      - uses: actions/setup-python@v6
+        if: steps.guard.outputs.skip != 'true'
+        with:
+          python-version: "3.12"
+      - run: pip install requests openpyxl
+        if: steps.guard.outputs.skip != 'true'
+      - run: python historical.py --out data/historical
+        if: steps.guard.outputs.skip != 'true'
+      - name: Commit extracts
+        if: steps.guard.outputs.skip != 'true'
+        run: |
+          git config user.name "legal-tender-bot"
+          git config user.email "legal-tender-bot@users.noreply.github.com"
+          git pull --rebase --autostash origin main || { git rebase --abort 2>/dev/null || true; }
+          if grep -rlq '^<<<<<<< ' data 2>/dev/null; then
+            echo 'refusing to commit: conflict markers in data/' >&2; exit 1
+          fi
+          git add data/historical
+          git diff --staged --quiet || git commit -m "Historical extracts $(date -u +%F)"
+          git push
