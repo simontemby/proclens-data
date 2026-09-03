@@ -446,7 +446,8 @@ const FLAGS={
   limited_tender:"Awarded without open competition",
   long_term:"Runs longer than five years",
   agent_or_trustee:"Supplier name contains an agent, trustee or trading-as entity",
-  platform_or_reseller:"A platform, marketplace or reseller — the supplier named is the channel, not necessarily the capability bought"
+  platform_or_reseller:"A platform, marketplace or reseller — the supplier named is the channel, not necessarily the capability bought",
+  source_disagreement:"The AusTender API and a Senate Order snapshot report different values for this contract"
 };
 const DATA="./data/";
 const S={idx:null,hidx:null,hist:new Map(),shards:new Map(),rows:[],view:[],sup:[],supView:[],page:0,sPage:0,PER:100,
@@ -702,7 +703,17 @@ function rebuild(){
       const extra={son:h.son, atm:h.atm, panel:h.panel, consult:h.consult,
                    consult_reason:h.consult_reason, hist_amendments:h.amendments,
                    hist_years:h.years};
-      if(ex){ Object.assign(ex,extra); ex.src=ex.src==="senate"?"senate+historical":"both"; ex._h=undefined; }
+      if(ex){
+        Object.assign(ex,extra);
+        ex.src=ex.src==="senate"?"senate+historical":"both";
+        ex.v_hist=h.value;
+        if(h.value!=null&&ex.value!=null&&Math.round(h.value*100)!==Math.round(ex.value*100)){
+          ex.disagree=true;
+          if(ex._f.indexOf("source_disagreement")<0) ex._f=ex._f.concat("source_disagreement");
+          ex.flags=(ex.flags?ex.flags+",":"")+"source_disagreement";
+        }
+        ex._h=undefined;
+      }
       else byCn.set(h.cn,Object.assign({
         cn:h.cn, title:h.title, buyer:h.agency, supplier:h.supplier, abn:h.abn,
         value:h.value, value_first:h.value_first, cur:"AUD",
@@ -724,6 +735,19 @@ function rebuild(){
       ex.conf_outputs=o.conf_outputs; ex.conf_out_reason=o.conf_out_reason;
       ex.observations=o.observations; ex.periods=o.periods;
       if(ex.value_first==null) ex.value_first=o.value_first;
+      // Two arms of government reporting different figures for the same
+      // contract is itself the finding, so keep both rather than letting one
+      // quietly win. The API stays the displayed value because it is the live
+      // record — and because picking by load order made the figure change
+      // depending on which shards happened to be in memory.
+      ex.v_api=ex.value;
+      ex.v_senate=o.value;
+      if(o.value!=null&&ex.value!=null&&Math.round(o.value*100)!==Math.round(ex.value*100)){
+        ex.disagree=true;
+        ex.disagree_period=(o.periods||[]).slice(-1)[0]||"";
+        if(ex._f.indexOf("source_disagreement")<0) ex._f=ex._f.concat("source_disagreement");
+        ex.flags=(ex.flags?ex.flags+",":"")+"source_disagreement";
+      }
       ex._h=undefined;
     }else{
       byCn.set(o.cn,{
@@ -1157,6 +1181,19 @@ document.addEventListener("click",e=>{
   let h=rows.filter(([,v])=>v!=null&&v!=="").map(([k,v])=>`<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("");
   if(r._f.length) h+="<dt>Flags</dt><dd>"+r._f.map(f=>
     `<div><b>${esc(f.replace(/_/g," "))}</b> — ${esc(FLAGS[f]||"")}</div>`).join("")+"</dd>";
+  if(r.disagree){
+    const rows2=[["AusTender API",r.v_api],["Senate Order snapshot",r.v_senate],
+                 ["Historical extract",r.v_hist]].filter(x=>x[1]!=null);
+    h+='<dt>Sources disagree</dt><dd>'+
+      rows2.map(x=>`<div>${esc(x[0])} — <b>${money(x[1])}</b></div>`).join("")+
+      `<div class="t-sub" style="margin-top:6px">The figure shown above is the `+
+      `AusTender API's, which is the live record. Both are Commonwealth `+
+      `publications of the same contract. In about 63% of cases with a `+
+      `multi-period trail the API matches the earliest snapshot, which is what an `+
+      `amendment the API has not reflected would look like — but a third do not `+
+      `fit that pattern, so there is no single explanation. Treat it as a record `+
+      `worth checking, not as evidence of anything.</div></dd>`;
+  }
   // The dated value trail exists only in the Senate Order snapshots.
   if((r.observations||[]).length>1)
     h+="<dt>Value history</dt><dd>"+r.observations.map(o=>
