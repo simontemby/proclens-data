@@ -260,6 +260,7 @@ footer{border-top:1px solid var(--line);margin-top:32px;padding:20px 0 44px;colo
         <span class="badge" id="filterCount" hidden>0</span></button>
     </div>
     <p class="count" id="count" role="status" aria-live="polite">Loading archive…</p>
+    <p class="count" id="bgstat" aria-live="polite" style="padding-top:2px"></p>
     <progress id="prog" max="100" value="0" hidden></progress>
   </div>
 </div>
@@ -452,7 +453,7 @@ function histUrl(y){
 async function loadHistYears(years){
   const need=years.filter(y=>!S.hist.has(y)).sort().reverse();
   if(!need.length) return;
-  const p=$("#prog"); p.hidden=false; p.max=need.length; p.value=0;
+  const p=$("#prog"); p.hidden=S.bg; if(!S.bg){p.max=need.length; p.value=0;}
   const c=$("#count"); const was=c.innerHTML;
   const queue=need.slice(); let done=0;
   async function lane(){
@@ -474,19 +475,51 @@ async function loadHistYears(years){
           }));
         }
       }catch(e){ S.hist.set(y,[]); }
-      p.value=++done;
-      c.innerHTML=`Loading historical archive — ${done} of ${need.length} years…`;
+      ++done;
+      if(S.bg) bgsay(`Loading the full archive — ${done} of ${need.length} historical years…`);
+      else { p.value=done; c.innerHTML=`Loading historical archive — ${done} of ${need.length} years…`; }
       // rebuild() is ~650ms on a laptop over the full corpus and several times
       // that on a phone, so repaint early then sparingly rather than per shard.
       if(done===1||done===3||done%6===0||done===need.length){
         rebuild();
-        c.innerHTML=done===need.length?was:`Loading historical archive — ${done} of ${need.length} years…`;
+        if(!S.bg) c.innerHTML=done===need.length?was:`Loading historical archive — ${done} of ${need.length} years…`;
       }
     }
   }
   await Promise.all(Array.from({length:Math.min(6,need.length)},lane));
-  p.hidden=true;
+  if(!S.bg) p.hidden=true;
   rebuild();
+}
+/* The whole corpus is ~161 MB raw, about 44 MB gzipped, across roughly 700,000
+   contracts. That is a reasonable background download on a desktop and a bad
+   one on a phone — both for data cost and because that many row objects is a
+   real memory risk. So it is fetched automatically only where the browser says
+   the connection and device can take it, and offered as a button otherwise. */
+function canPrefetch(){
+  try{
+    const c=navigator.connection||{};
+    if(c.saveData) return false;
+    if(/2g/.test(c.effectiveType||"")||c.effectiveType==="3g") return false;
+    if(typeof navigator.deviceMemory==="number"&&navigator.deviceMemory<4) return false;
+    if(matchMedia&&matchMedia("(max-width:700px)").matches) return false;
+  }catch(e){}
+  return true;
+}
+function bgsay(t){ const e=$("#bgstat"); if(e) e.innerHTML=t||""; }
+
+async function prefetchAll(manual){
+  if(S.bgDone||S.bgRunning) return;
+  S.bgRunning=true; S.bg=true;
+  try{
+    bgsay("Loading the full archive in the background…");
+    const months=(S.idx&&S.idx.shards||[]).map(x=>x.month).filter(m=>m!=="unknown");
+    await ensureMonths(months);
+    await loadHistYears(histYearsFor("",""));
+    S.bgDone=true;
+    bgsay(`Full archive loaded — ${S.rows.length.toLocaleString()} contracts searchable.`);
+    setTimeout(()=>bgsay(""),6000);
+  }catch(e){ bgsay("Could not finish loading the full archive."); }
+  finally{ S.bgRunning=false; S.bg=false; }
 }
 function shardUrl(m){
   const s=(S.idx&&S.idx.shards||[]).find(x=>x.month===m);
@@ -537,7 +570,7 @@ async function ensureMonths(months){
   loadHistYears(histYearsFor(S.d1,S.d2));   // background: merges on arrival
   const need=months.filter(m=>!S.shards.has(m));
   if(!need.length) return;
-  const p=$("#prog"); p.hidden=false; p.max=need.length; p.value=0;
+  const p=$("#prog"); p.hidden=S.bg; if(!S.bg){p.max=need.length; p.value=0;}
   const c=$("#count"); const was=c.innerHTML;
   let done=0;
   // Fetch shards concurrently. Serially, widening the range to 2021 meant ~60
@@ -551,14 +584,18 @@ async function ensureMonths(months){
         const res=await fetch(shardUrl(m),{cache:"force-cache"});
         S.shards.set(m,res.ok?expand(await res.json()):[]);
       }catch(e){ S.shards.set(m,[]); }
-      p.value=++done;
-      c.innerHTML=`Loading ${done} of ${need.length} months…`;
+      ++done;
+      if(S.bg){ bgsay(`Loading the full archive — ${done} of ${need.length} months…`); }
+      else{ p.value=done; c.innerHTML=`Loading ${done} of ${need.length} months…`; }
       // Paint partial results as they arrive rather than holding a blank table.
-      if(done===1||done%8===0){ rebuild(); c.innerHTML=`Loading ${done} of ${need.length} months…`; }
+      if(done===1||done%8===0){
+        rebuild();
+        if(!S.bg) c.innerHTML=`Loading ${done} of ${need.length} months…`;
+      }
     }
   }
   await Promise.all(Array.from({length:Math.min(LANES,need.length)},lane));
-  p.hidden=true; c.innerHTML=was;
+  if(!S.bg){ p.hidden=true; c.innerHTML=was; }
   rebuild();
 }
 function rebuild(){
@@ -672,6 +709,12 @@ async function boot(){
   }
   await ensureMonths(monthsFor(S.d1,S.d2));
   loadSenate();   // background: merges into the same corpus when it arrives
+  setTimeout(()=>{
+    if(canPrefetch()) prefetchAll();
+    else bgsay('Showing the last three months. '+
+      '<button class="linkbtn" id="loadall">Load the full archive (about 44 MB)</button>');
+    const la=$("#loadall"); if(la) la.onclick=()=>{ bgsay(""); prefetchAll(true); };
+  },1200);
   fetch(DATA+"historical/index.json",{cache:"no-cache"})
     .then(r=>r.ok?r.json():null).then(j=>{ if(j){ S.hidx=j; } }).catch(()=>{});
   // AusTender publishes the category as a bare UNSPSC number; the codeset turns
