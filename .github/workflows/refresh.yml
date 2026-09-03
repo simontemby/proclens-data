@@ -46,9 +46,31 @@ jobs:
           git config user.name "legal-tender-bot"
           git config user.email "legal-tender-bot@users.noreply.github.com"
 
+          # refresh.py rebuilds every shard from what it reads on disk, so a
+          # stale checkout silently drops rows another writer had added. Sync
+          # BEFORE building, not only before pushing.
+          sync () {
+            git pull --rebase --autostash origin main || {
+              echo "rebase failed; aborting rather than committing a conflict" >&2
+              git rebase --abort 2>/dev/null || true
+              return 1
+            }
+            if grep -rlq '^<<<<<<< ' data 2>/dev/null; then
+              echo "conflict markers present in data/ after sync" >&2
+              return 1
+            fi
+          }
+
           save () {
             # Always rebase onto whatever landed while we were fetching, or the
             # push is rejected and the work is thrown away.
+            # Never commit a file containing conflict markers. Five corrupted
+            # files reached main this way and took the site down.
+            if grep -rlq '^<<<<<<< ' data 2>/dev/null; then
+              echo "refusing to commit: conflict markers in data/" >&2
+              grep -rl '^<<<<<<< ' data >&2
+              return 1
+            fi
             git add data
             if git diff --staged --quiet; then echo "nothing to commit"; return 0; fi
             git commit -m "$1"
@@ -73,15 +95,18 @@ jobs:
           }
 
           if [ -n "${BACKFILL_FROM:-}" ]; then
+            sync
             python refresh.py --backfill-from "$BACKFILL_FROM" --chunk-days 180
             save "Backfill chunk $(date -u +%F\ %H:%M)"
             for i in $(seq 1 40); do
               more_to_do || break
+              sync
               python refresh.py --resume --chunk-days 180
               save "Backfill chunk $(date -u +%F\ %H:%M)"
             done
             echo "backfill loop finished"
           else
+            sync
             python refresh.py --since-days 21
             save "Archive refresh $(date -u +%F)"
           fi

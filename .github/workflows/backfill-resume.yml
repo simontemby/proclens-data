@@ -25,7 +25,25 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      # Two writers corrupted data/ once. A concurrency group alone did not
+      # prevent the overlap, so this also refuses to start while a refresh run
+      # is actually in flight.
+      - name: Refuse to run alongside another archive writer
+        id: guard
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          busy=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow refresh.yml \
+                   --status in_progress --json databaseId --jq 'length')
+          echo "in-flight refresh runs: $busy"
+          if [ "${busy:-0}" -gt 0 ]; then
+            echo "skip=true" >> $GITHUB_OUTPUT
+          else
+            echo "skip=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Is there anything to resume?
+        if: steps.guard.outputs.skip != 'true'
         id: check
         run: |
           if [ ! -f data/index.json ]; then
@@ -38,22 +56,22 @@ jobs:
           PY
 
       - uses: actions/setup-python@v6
-        if: steps.check.outputs.todo == 'true'
+        if: steps.guard.outputs.skip != 'true' && steps.check.outputs.todo == 'true'
         with:
           python-version: "3.12"
 
       - run: pip install requests
-        if: steps.check.outputs.todo == 'true'
+        if: steps.guard.outputs.skip != 'true' && steps.check.outputs.todo == 'true'
 
       # One chunk per run, committed immediately, so progress is never lost.
       - name: Resume one chunk
-        if: steps.check.outputs.todo == 'true'
+        if: steps.guard.outputs.skip != 'true' && steps.check.outputs.todo == 'true'
         env:
           AUSTENDER_TOKEN: ${{ secrets.AUSTENDER_TOKEN }}
         run: python refresh.py --resume --chunk-days 180
 
       - name: Commit progress
-        if: steps.check.outputs.todo == 'true'
+        if: steps.guard.outputs.skip != 'true' && steps.check.outputs.todo == 'true'
         run: |
           git config user.name "legal-tender-bot"
           git config user.email "legal-tender-bot@users.noreply.github.com"
