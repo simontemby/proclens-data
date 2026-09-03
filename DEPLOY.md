@@ -1,191 +1,104 @@
-# Deploying ProcLens
+# Deploying Legal Tender
 
-Two pieces. `refresh.py` runs on a schedule somewhere with network access and writes
-`bundle.json`. `proclens.html` runs in the browser and fetches that bundle over HTTPS.
-Nothing else is needed — no server, no database, no hosting bill.
+One repository does everything: holds the code, runs the ingests on GitHub's machines,
+stores the data, and serves the site. Nothing runs on your computer, and there is no
+server, database or hosting bill.
 
 ```
-  GitHub Actions (weekly)          raw.githubusercontent.com          Claude artifact
-  ───────────────────────          ─────────────────────────          ───────────────
-  refresh.py                       bundle.json                        proclens.html
-   pull OCDS by lastModified   →    committed to repo             →    fetch, search,
-   roll up amendments by OCID       (public, CORS: *)                  flag, alert
-   compute flags
-   diff vs previous snapshot
+  GitHub Actions                    data/ in the repo                GitHub Pages
+  ──────────────                    ─────────────────                ────────────
+  refresh.py    weekly          →   contracts-YYYY-MM.json       →   index.html
+  atm.py        3x daily            atm/atm-YYYY.json                fetches only the
+  senate.py     weekly              senate/contracts.json            shards a query
+  so13.py       monthly             so13/*.json                      actually needs
+  historical.py monthly             historical/contracts-YYYY.json
 ```
 
-## Why this shape
+## Setup
 
-The front end can't fetch AusTender directly — the API needs a token, and browser
-requests from a sandboxed page are blocked by CORS. Something server-side has to do
-the pull. Once it has, the result is a static file, and a static file is the cheapest
-thing in the world to serve.
+1. **Pages.** Settings → Pages → Source: *Deploy from a branch* → `main` / root. The
+   site is live at `https://USER.github.io/REPO/` a minute later.
+2. **Actions write permission.** Settings → Actions → General → Workflow permissions →
+   *Read and write*. Without it every workflow builds correctly and then fails to push.
+3. Nothing else. The page looks for `data/` beside itself — same origin, no CORS, no
+   URL to configure.
 
-`raw.githubusercontent.com` returns `access-control-allow-origin: *`, so the artifact
-can read it directly. Any static host with permissive CORS works equally well.
+The repo must be public for Pages to serve it on a free account. That is correct for a
+transparency archive and wrong for anything else.
 
-## 1. Set up the repository
+## Verify the mapper before trusting the data
 
 ```bash
-mkdir proclens-data && cd proclens-data && git init
-cp /path/to/refresh.py .
-pip install requests
-```
-
-Verify the field mapping before trusting anything:
-
-```bash
-export AUSTENDER_TOKEN=…          # if the API rejects anonymous calls
+pip install requests openpyxl
 python refresh.py --inspect
 ```
 
-This samples 50 live releases and prints every field path present, with counts.
-Reconcile that output against `to_row()` in `refresh.py` and fix any mismatches.
-**Do this first.** The mapper was written from documentation, not from observed
-responses, and OCDS extension fields are not fully documented.
+This samples live releases and prints every field path present, with counts. Reconcile
+it against `to_row()`. This is not a formality: the mapper was originally written from
+documentation rather than observed responses, and four fields were wrong — the buyer
+column showed the supplier, and the title showed an internal purchase-order reference.
 
-Then a real run:
+## The data layout
 
-```bash
-python refresh.py --months 24 --out bundle.json
-git add bundle.json && git commit -m "Initial bundle" && git push
-```
+Contracts are sharded by month, historical extracts and notices by year. A date filter
+fetches only the shards it needs instead of pulling 163 MB to answer a question about
+one quarter. Each shard's entry in `index.json` carries a **content digest**, which the
+front end stamps into the URL: a changed shard is a different URL, an unchanged one
+still serves from cache. That digest replaced a count-and-byte-size stamp, which could
+not tell two versions apart when a value was corrected to another figure of the same
+length.
 
-## 2. Schedule it
+Month shards are immutable — what AusTender said when the archive first saw each
+contract. `updates.json` carries every row that has changed since and is overlaid by
+ocid, so the table shows current truth without rewriting history.
 
-`.github/workflows/refresh.yml`:
+## Backfill
 
-```yaml
-name: Refresh bundle
-on:
-  schedule: [{cron: "0 18 * * 0"}]   # Sundays, 04:00 AEST
-  workflow_dispatch:
-permissions:
-  contents: write
-jobs:
-  refresh:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with: {python-version: "3.12"}
-      - run: pip install requests
-      - run: python refresh.py --months 24 --out bundle.json
-        env:
-          AUSTENDER_TOKEN: ${{ secrets.AUSTENDER_TOKEN }}
-      - run: |
-          git config user.name "proclens-bot"
-          git config user.email "proclens-bot@users.noreply.github.com"
-          git add bundle.json
-          git diff --staged --quiet || git commit -m "Refresh $(date -u +%F)"
-          git push
-```
-
-Add `AUSTENDER_TOKEN` under Settings → Secrets and variables → Actions.
-
-Keeping `bundle.json` in git is deliberate. Every refresh becomes a commit, so the
-repository history is a permanent record of what AusTender said and when — which is
-exactly what a weekly overwrite destroys.
-
-## 3. Deploy the front end
-
-Three paths. They differ on one axis — where the data comes from — and that decides
-everything else.
-
-### A. Claude artifact, fetching the bundle
-
-Open `proclens.html` as an artifact, paste the raw URL into **Bundle URL**, load:
-
-```
-https://raw.githubusercontent.com/USER/proclens-data/main/bundle.json
-```
-
-Then Publish, per Anthropic's documentation: on Pro and Max a public link is the only
-sharing option; on Team and Enterprise public sharing is off until an Owner enables it.
-
-**Test the fetch before committing to this path.** Artifacts run sandboxed and outbound
-requests to arbitrary hosts may be blocked regardless of the server's CORS headers. If
-the load fails with a network error, use path B or C.
-
-Two things to know before publishing. Unpublishing is permanent — you cannot republish
-the same artifact, so there is no take-down-and-fix cycle. And viewers of a shared
-artifact also gain access to files attached to the conversation that created it, so
-publish from a clean conversation.
-
-### B. GitHub Pages — recommended
-
-One repository does everything: holds the code, runs the refresh on GitHub's machines,
-stores the data, and serves the site. Nothing runs on your computer.
-
-Add the front end to the same repo as the data, named `index.html`:
+The archive covers five years. A full build is long enough to outlast a runner, so it
+is chunked and resumable:
 
 ```bash
-cp proclens.html index.html
-git add index.html && git commit -m "Add front end" && git push
+python refresh.py --backfill-from 2021-01-01 --backfill-to 2026-01-01 --chunk-days 180
+python refresh.py --resume            # continues from the checkpoint in index.json
 ```
 
-Then Settings → Pages → Source: **Deploy from a branch** → `main` / root. A minute
-later the site is live at `https://USER.github.io/proclens-data/`.
+`backfill-resume.yml` runs that every 30 minutes until the checkpoint is complete. Each
+chunk commits on its own, so an interrupted run loses one chunk rather than everything.
+Note that Actions uses the workflow file from the commit that *triggered* the run: a fix
+pushed after a run starts does not apply to it.
 
-Nothing else to configure. The page looks for `bundle.json` beside itself and loads it
-automatically — same origin, so no URL to paste and no CORS involved. When the weekly
-workflow commits a new bundle, Pages republishes and the site is current. The refresh
-and the deploy are the same action.
+## Concurrency
 
-Saved searches persist here. `window.storage` is absent outside Claude, so the page
-falls back to `localStorage`, which is a real browser API on a real origin.
-
-Two things to be clear about. **The site is public**, and on free accounts the repo
-must be public for Pages to serve it — fine for a transparency tool, wrong for anything
-sensitive. And **Pages has soft limits** on site size and monthly bandwidth; a bundle
-in the single-digit megabytes is well inside them, but check GitHub's current figures
-before assuming.
-
-### C. Self-contained build
-
-Inline the data at refresh time and the network dependency disappears:
-
-```bash
-python refresh.py --months 24 --out bundle.json --embed proclens.html
-# writes bundle.json and bundle.html
-```
-
-`bundle.html` opens from a double-click, a static host, or a pasted artifact, with no
-fetch and no CORS. Deploying an update means replacing one file. This is the most
-robust option and the one to use if the artifact sandbox blocks outbound requests.
-
-The cost: the file is as large as the data. Fine at 12 months, unwieldy at 24.
+Every workflow that writes `data/` refuses to start while another writer is in flight,
+and refuses to commit a file containing `<<<<<<<`. Both guards exist because two
+unguarded writers once overlapped, wrote conflict markers into five files on `main`, and
+took the site down. `refresh.py` is the priority writer; the others stand down for it.
 
 ## Size
 
-The whole bundle loads into browser memory. Roughly 1 MB per 6,000 contracts.
-
-| Window | Contracts | Bundle |
-|---|---|---|
-| 12 months | ~35,000 | ~6 MB |
-| 24 months | ~70,000 | ~12 MB |
-| Since 2007 | ~1,200,000 | ~200 MB — will not load |
-
-Twenty-four months is about the practical ceiling. For the full history you need a
-server-side index, which is what the FastAPI build in `proclens.zip` is for. That
-version does the same job without the size limit, at the cost of having to host it.
+About 634,000 distinct contracts, 163 MB on disk and ~44 MB gzipped across the shards. That is well
+inside Pages' soft limits, but the front end still does not load it all by default: it
+opens on the most recent three months and fetches the rest in the background only where
+the browser reports a connection and a device that can take it. Everyone else gets a
+button.
 
 ## What this deliberately does not do
 
-- **No live sync.** Batch only. The source isn't real-time either: agencies have 42
-  days to publish a contract notice, so weekly refresh loses you nothing real.
-- **No email.** Alerts surface as counts in the interface when you open it. If you
-  want email, `alerts.py` in the server build sends it.
-- **No Transparency Portal, GrantConnect or Senate Order data.** Committed value at
-  award only. Reconciling against amounts actually paid is the next layer and the
-  most valuable one.
-- **No subcontractors.** Only obtainable by written request to the agency contact on
-  each notice.
+- **No live sync.** Agencies have 42 days to publish a contract notice, so a weekly
+  refresh loses nothing real.
+- **No email.** Alerts are published as an Atom feed; a static host cannot send mail.
+- **No amounts paid.** Every value here is committed at award. Reconciling against what
+  was actually paid is the next layer and the most valuable one.
+- **No subcontractors.** Only obtainable by written request to the agency contact named
+  on each notice.
 
 ## Reading the flags
 
 `late_publish`, `value_growth`, `threshold_hugging`, `backdated`, `limited_tender`,
-`long_term`. Every one has innocent explanations — emergency procurement is legitimately
-limited-tender, long IT contracts are normal, thresholds change. Treat them as a queue
-for review, not as findings. Thresholds and deadlines are set at the top of `refresh.py`;
-confirm the current figures before relying on them.
+`long_term`, `agent_or_trustee`, `platform_or_reseller`, `source_disagreement`.
+
+Every one has innocent explanations — emergency procurement is legitimately
+limited-tender, long IT contracts are normal, thresholds change, and two arms of the
+Commonwealth can report different figures for defensible reasons. Treat them as a queue
+for review, not as findings. Thresholds are set at the top of `refresh.py`; confirm the
+current figures before relying on them.

@@ -28,7 +28,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           busy=0
-          for wf in refresh.yml backfill-resume.yml senate.yml so13.yml; do
+          for wf in refresh.yml backfill-resume.yml senate.yml so13.yml historical.yml atm.yml; do
             [ "$wf" = "so13.yml" ] && continue
             n=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow "$wf" \
                   --status in_progress --json databaseId --jq 'length' 2>/dev/null || echo 0)

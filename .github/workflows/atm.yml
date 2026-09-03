@@ -1,12 +1,18 @@
-name: Senate Order snapshots
+name: Approaches to market
 
-# AusTender keeps only three periods and deletes the rest, so a missed capture
-# is a permanent loss. Reports are published twice yearly; weekly checking is
-# cheap insurance and the content hash makes a repeat run a no-op.
+# AusTender publishes the current ATM list as 75 RSS items and keeps no archive,
+# so a notice that opens and closes between two polls is lost for good. Three
+# times a day is the cheap insurance: approaches usually stay open for weeks, so
+# the interval is generous even when the writer guard makes a run stand down.
 on:
   schedule:
-    - cron: "0 21 * * 2"
+    - cron: "15 2,10,18 * * *"
   workflow_dispatch:
+    inputs:
+      refresh_detail:
+        description: "Re-fetch the detail page for every notice"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -16,9 +22,9 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  capture:
+  poll:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 40
     steps:
       # Any workflow that writes data/ must not run beside another writer, and
       # must never commit a half-merged file. Two unguarded writers overlapping
@@ -30,7 +36,7 @@ jobs:
         run: |
           busy=0
           for wf in refresh.yml backfill-resume.yml senate.yml so13.yml historical.yml atm.yml; do
-            [ "$wf" = "senate.yml" ] && continue
+            [ "$wf" = "atm.yml" ] && continue
             n=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow "$wf" \
                   --status in_progress --json databaseId --jq 'length' 2>/dev/null || echo 0)
             busy=$((busy + n))
@@ -44,11 +50,16 @@ jobs:
         if: steps.guard.outputs.skip != 'true'
         with:
           python-version: "3.12"
-      - run: pip install requests openpyxl
+      - run: pip install requests
         if: steps.guard.outputs.skip != 'true'
-      - run: python senate.py --out data/senate
+
+      - name: Poll the notice feed
         if: steps.guard.outputs.skip != 'true'
-      - name: Commit snapshots
+        run: |
+          python atm.py --out data/atm --watchlist data/watchlist.json \
+            ${{ inputs.refresh_detail && '--refresh-detail' || '' }}
+
+      - name: Commit notices and alerts
         if: steps.guard.outputs.skip != 'true'
         run: |
           git config user.name "legal-tender-bot"
@@ -57,6 +68,14 @@ jobs:
           if grep -rlq '^<<<<<<< ' data 2>/dev/null; then
             echo 'refusing to commit: conflict markers in data/' >&2; exit 1
           fi
-          git add data/senate
-          git diff --staged --quiet || git commit -m "Senate Order snapshots $(date -u +%F)"
-          git push
+          git add data/atm
+          # index.json alone changes on every poll because it carries a
+          # timestamp. Committing that three times a day for no news is noise,
+          # so a run with nothing but the clock to report says nothing.
+          if git diff --staged --name-only | grep -qv '^data/atm/index.json$'; then
+            git commit -m "Approaches to market $(date -u +%F)"
+            git push
+          else
+            git reset
+            echo "no change beyond the timestamp — nothing committed"
+          fi

@@ -1,0 +1,47 @@
+{
+  "note": "Watches applied to new approaches to market. A watch fires only for a notice first seen after the watch existed, so adding one here does not replay the archive into the alert feed. Every condition a watch states must hold; a watch that states nothing matches nothing. Terms are case-insensitive substrings of the ATM id, title, description, agency, category and type.",
+  "fields": {
+    "name": "label shown on the alert",
+    "any": "fires if ANY of these terms appears",
+    "all": "every one of these terms must appear",
+    "none": "suppresses the match if any of these appears",
+    "agency": "agency name substring",
+    "panel": "Yes or No — panel arrangement",
+    "multi_agency": "Yes or No — open to multiple agencies",
+    "multi_stage": "Yes or No"
+  },
+  "watches": [
+    {
+      "name": "Entity resolution and graph analytics",
+      "any": ["quantexa", "graphaware", "palantir", "neo4j", "entity resolution",
+              "link analysis", "graph database", "network analytics",
+              "identity resolution", "data matching", "record linkage"]
+    },
+    {
+      "name": "Fraud and integrity analytics",
+      "any": ["fraud detection", "fraud analytics", "counter fraud", "integrity analytics",
+              "anti-money laundering", "financial crime", "risk scoring"]
+    },
+    {
+      "name": "Cloud marketplace and reseller channels",
+      "any": ["marketplace", "reseller", "aws marketplace", "azure marketplace",
+              "value added reseller", "licence reseller", "license reseller",
+              "software licensing agreement", "enterprise agreement renewal"]
+    },
+    {
+      "name": "Disability and NDIS delivery",
+      "any": ["ndis", "ndia", "national disability insurance", "ndis participant",
+              "disability support", "assistive technology", "supported independent living"]
+    },
+    {
+      "name": "Panel arrangements open to every agency",
+      "panel": "Yes",
+      "multi_agency": "Yes"
+    },
+    {
+      "name": "Consulting and contractor panels",
+      "any": ["management consultancy", "management advisory", "professional services panel",
+              "labour hire", "contingent workforce", "audit services"]
+    }
+  ]
+}

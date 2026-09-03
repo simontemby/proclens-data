@@ -77,6 +77,29 @@ h1 .co{-webkit-text-fill-color:var(--accent-2);color:var(--accent-2)}
 .tab{font:600 13px var(--sans);padding:8px 14px;min-height:38px;border:0;background:transparent;
   color:var(--muted);cursor:pointer;border-radius:var(--rs)}
 .tab[aria-selected=true]{background:var(--card);color:var(--accent);box-shadow:var(--shadow)}
+.ts{display:none}
+.dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--accent);
+  margin-left:5px;vertical-align:2px}
+.n-open{color:#0a7d4f;font-weight:600}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]) .n-open{color:#4ade9a}}
+.n-closed{color:var(--muted)}
+.n-soon{color:#b4521a;font-weight:600}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]) .n-soon{color:#ffa76a}}
+.alertbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 14px}
+/* On a phone these chips wrapped to five rows, putting the table below the fold
+   before anyone had asked for anything. One swipeable row instead. */
+@media(max-width:759px){
+  .alertbar{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;
+    -webkit-overflow-scrolling:touch;padding-bottom:4px}
+  .alertbar::-webkit-scrollbar{display:none}
+  .alertbar>*{flex:0 0 auto}
+  .alertbar .feedlink{display:none}
+}
+.alertbar .flag{cursor:pointer}
+/* Value, agency, sort and the review flags all describe awarded contracts.
+   Leaving them on screen over a list of notices invites a filter that silently
+   does nothing, so the notices tab shows only the controls that apply to it. */
+body.notices #grp-value,body.notices #agency,body.notices #sort,body.notices #chips{display:none}
 .iconbtn{display:inline-flex;align-items:center;gap:6px;font:600 13px var(--sans);
   padding:8px 12px;min-height:38px;border:1px solid var(--line-ui);border-radius:var(--rs);
   background:var(--card);color:var(--ink);cursor:pointer}
@@ -274,7 +297,10 @@ footer{border-top:1px solid var(--line);margin-top:32px;padding:20px 0 44px;colo
   .head{gap:8px;padding:10px 0}
   h1{font-size:19px}
   .tabs{gap:2px;padding:2px}
-  .tab{padding:8px 12px;font-size:12.5px}
+  /* Three tabs and two actions have to share one line on a 375px screen, so the
+     third tab drops to a shorter word rather than pushing the row onto two. */
+  .tab{padding:8px 10px;font-size:12px}
+  .tl{display:none}.ts{display:inline}
   .iconbtn{padding:8px 11px;min-width:40px;justify-content:center}
   .iconbtn .lbl{display:none}
   .iconbtn .ico{font-size:15px;line-height:1}
@@ -299,6 +325,9 @@ footer{border-top:1px solid var(--line);margin-top:32px;padding:20px 0 44px;colo
     <div class="tabs" role="tablist">
       <button class="tab" role="tab" id="tab-c" aria-selected="true">Contracts</button>
       <button class="tab" role="tab" id="tab-s" aria-selected="false">Suppliers</button>
+      <button class="tab" role="tab" id="tab-n" aria-selected="false"><span class="tl">Open
+        tenders</span><span class="ts">Tenders</span><span class="dot" id="alertDot" hidden
+        aria-hidden="true"></span></button>
     </div>
     <button class="iconbtn" id="about" aria-label="About the data" title="About the data">
       <span class="ico" aria-hidden="true">ⓘ</span><span class="lbl">About the data</span></button>
@@ -394,6 +423,27 @@ footer{border-top:1px solid var(--line);margin-top:32px;padding:20px 0 44px;colo
     <div id="more" style="text-align:center;padding:16px"></div>
   </section>
 
+  <section id="pane-n" hidden>
+    <div class="note"><b>Approaches to market, not awards.</b> Nothing here has been won
+      by anyone. <button class="linkbtn" id="aboutN">How this list is built</button></div>
+    <div class="alertbar" id="alertbar"></div>
+    <div class="tw">
+      <table>
+        <caption class="skip">Approaches to market</caption>
+        <thead><tr>
+          <th scope="col">Notice</th>
+          <th scope="col">Agency</th>
+          <th scope="col" class="hide-m">Category</th>
+          <th scope="col" class="hide-m">Type</th>
+          <th scope="col" class="num"><button data-sn="close">Closes</button></th>
+          <th scope="col">Status</th>
+        </tr></thead>
+        <tbody id="tbn"></tbody>
+      </table>
+    </div>
+    <div id="moren" style="text-align:center;padding:16px"></div>
+  </section>
+
   <section id="pane-s" hidden>
     <div class="note"><b>Grouped by ABN, not by name.</b> The same entity is
       published under several spellings, so a name-keyed total undercounts it.
@@ -432,6 +482,10 @@ footer{border-top:1px solid var(--line);margin-top:32px;padding:20px 0 44px;colo
   AusTender under the Commonwealth Procurement Rules. Source data is
   <a href="https://api.tenders.gov.au/ocds/" rel="noopener">Department of Finance open data</a>
   (CC BY 3.0 AU). Values are committed at award, not amounts actually paid.</p>
+  <p>Approaches to market come from AusTender's current-notice feed and are
+  <a href="./data/atm/alerts.xml" rel="noopener">available as an Atom feed</a> filtered by
+  <a href="https://github.com/simontemby/proclens-data/blob/main/data/watchlist.json" rel="noopener">a watchlist</a>.
+  An approach is not an award.</p>
   <p id="prov">—</p>
 </footer>
 
@@ -451,7 +505,8 @@ const FLAGS={
 };
 const DATA="./data/";
 const S={idx:null,hidx:null,hist:new Map(),shards:new Map(),rows:[],view:[],sup:[],supView:[],page:0,sPage:0,PER:100,
-  q:"",agency:"",sort:"pub",flags:new Set(),d1:"",d2:"",v1:null,v2:null,tab:"c"};
+  q:"",agency:"",sort:"pub",flags:new Set(),d1:"",d2:"",v1:null,v2:null,tab:"c",
+  atm:new Map(),atmRows:[],atmView:[],alerts:[],nPage:0,nStatus:"open",nWatch:"",nDesc:false};
 const $=s=>document.querySelector(s);
 const money=n=>n==null?"—":"$"+Math.round(n).toLocaleString("en-AU");
 function catLabel(c){
@@ -500,16 +555,59 @@ function expand(sh){
   });
 }
 /* Month shards mean a date filter fetches only the months it needs, instead of
-   pulling ~100 MB of archive to answer a question about one quarter. */
-/* Shards were immutable when force-cache was chosen, and stopped being so the
-   moment backfill chunks began adding rows to existing months — leaving browsers
-   pinned to a stale copy that no reload would clear. Stamping the URL with the
-   shard's own count and byte size from index.json makes a changed shard a
-   different URL, while an unchanged one still serves straight from cache. */
-/* The historical extracts (1999-2020) are a third source, sharded by year and
-   fetched only when the date range reaches back into them — so the default
-   recent view never pays for 72 MB. They carry SON ids, ATM ids, panel flags
-   and amendment lineage that no live feed publishes. */
+   pulling ~100 MB of archive to answer a question about one quarter. The
+   historical extracts (1999-2020) are a second sharded source, by year, fetched
+   only when the date range reaches back into them — so the default recent view
+   never pays for 72 MB. They carry SON ids, ATM ids, panel flags and amendment
+   lineage that no live feed publishes. */
+
+/* ONE loader for every sharded source. This fan-out existed as three near
+   identical copies, which is exactly how the blocking sequential version that
+   made the page crawl came to ship twice: the fix reached one copy and not the
+   others. Sources differ only in which keys they need, how a key becomes a URL,
+   and which Map holds the result. */
+const LANES=6;
+/* Shards stopped being immutable the moment backfill chunks began adding rows to
+   existing months, which left browsers pinned to a stale copy no reload would
+   clear. The builder now stamps each shard's own content digest into index.json,
+   so a changed shard is a different URL and an unchanged one still serves from
+   cache. The digest replaced a count-and-byte-size stamp, which could not tell
+   two versions apart when a value was corrected to another figure of the same
+   length — $100,000.00 to $200,000.00 changes neither count nor size. Older
+   index.json files have no digest, so fall back rather than fetch nothing. */
+function stamp(s){ return s?(s.sha||`${s.count}-${s.bytes}`):"0"; }
+
+async function loadShards({need,url,store,noun,lanes=LANES,after=rebuild}){
+  need=need.filter(k=>!store.has(k));
+  if(!need.length) return;
+  const p=$("#prog"); p.hidden=S.bg; if(!S.bg){p.max=need.length; p.value=0;}
+  const c=$("#count"); const was=c.innerHTML;
+  const queue=need.slice(); let done=0;
+  const say=()=>{
+    const msg=`Loading ${done} of ${need.length} ${noun}…`;
+    if(S.bg) bgsay(`Loading the full archive — ${done} of ${need.length} ${noun}…`);
+    else c.innerHTML=msg;
+  };
+  async function lane(){
+    for(;;){
+      const k=queue.shift(); if(k===undefined) return;
+      try{
+        const r=await fetch(url(k),{cache:"force-cache"});
+        store.set(k,r.ok?expand(await r.json()):[]);
+      }catch(e){ store.set(k,[]); }
+      ++done;
+      if(!S.bg) p.value=done;
+      say();
+      // rebuild() is ~650ms on a laptop over the full corpus and several times
+      // that on a phone, so repaint early then sparingly rather than per shard.
+      if(done===1||done===3||done%6===0||done===need.length) after();
+    }
+  }
+  await Promise.all(Array.from({length:Math.min(lanes,need.length)},lane));
+  if(!S.bg){ p.hidden=true; c.innerHTML=was; }
+  after();
+}
+
 function histYearsFor(d1,d2){
   if(!S.hidx) return [];
   return (S.hidx.shards||[]).map(x=>x.year).filter(y=>{
@@ -521,53 +619,20 @@ function histYearsFor(d1,d2){
 }
 function histUrl(y){
   const s=(S.hidx&&S.hidx.shards||[]).find(x=>x.year===y);
-  return `${DATA}historical/contracts-${y}.json?v=${s?`${s.count}-${s.bytes}`:"0"}`;
+  return `${DATA}historical/contracts-${y}.json?v=${encodeURIComponent(stamp(s))}`;
 }
-/* Six lanes, newest year first, and a rebuild every couple of shards so results
-   appear while the rest arrives. Loading these one after another, blocking, was
-   75 MB of sequential fetches before the page painted anything. */
-async function loadHistYears(years){
-  const need=years.filter(y=>!S.hist.has(y)).sort().reverse();
-  if(!need.length) return;
-  const p=$("#prog"); p.hidden=S.bg; if(!S.bg){p.max=need.length; p.value=0;}
-  const c=$("#count"); const was=c.innerHTML;
-  const queue=need.slice(); let done=0;
-  async function lane(){
-    for(;;){
-      const y=queue.shift(); if(!y) return;
-      try{
-        const r=await fetch(histUrl(y),{cache:"force-cache"});
-        if(!r.ok){ S.hist.set(y,[]); }
-        else{
-          const b=await r.json(), f=b.fields||[], d=b.dict||{};
-          S.hist.set(y,(b.rows||[]).map(row=>{
-            const o={};
-            for(let i=0;i<f.length;i++){
-              const k=f[i]; let v=row[i];
-              if(d[k]!==undefined&&typeof v==="number") v=d[k][v];
-              o[k]=v;
-            }
-            return o;
-          }));
-        }
-      }catch(e){ S.hist.set(y,[]); }
-      ++done;
-      if(S.bg) bgsay(`Loading the full archive — ${done} of ${need.length} historical years…`);
-      else { p.value=done; c.innerHTML=`Loading historical archive — ${done} of ${need.length} years…`; }
-      // rebuild() is ~650ms on a laptop over the full corpus and several times
-      // that on a phone, so repaint early then sparingly rather than per shard.
-      if(done===1||done===3||done%6===0||done===need.length){
-        rebuild();
-        if(!S.bg) c.innerHTML=done===need.length?was:`Loading historical archive — ${done} of ${need.length} years…`;
-      }
-    }
-  }
-  await Promise.all(Array.from({length:Math.min(6,need.length)},lane));
-  if(!S.bg) p.hidden=true;
-  rebuild();
+function loadHistYears(years){
+  // Newest first: the years a reader is most likely to be asking about arrive
+  // before the 1999 extracts nobody scrolled to.
+  return loadShards({need:years.slice().sort().reverse(), url:histUrl,
+                     store:S.hist, noun:"historical years"});
 }
-/* The whole corpus is ~161 MB raw, about 44 MB gzipped, across roughly 700,000
-   contracts. That is a reasonable background download on a desktop and a bad
+function shardUrl(m){
+  const s=(S.idx&&S.idx.shards||[]).find(x=>x.month===m);
+  return `${DATA}contracts-${m}.json?v=${encodeURIComponent(stamp(s))}`;
+}
+/* The whole corpus is 163 MB raw, about 44 MB gzipped, across roughly 634,000
+   distinct contracts. That is a reasonable background download on a desktop and a bad
    one on a phone — both for data cost and because that many row objects is a
    real memory risk. So it is fetched automatically only where the browser says
    the connection and device can take it, and offered as a button otherwise. */
@@ -596,11 +661,6 @@ async function prefetchAll(manual){
     setTimeout(()=>bgsay(""),6000);
   }catch(e){ bgsay("Could not finish loading the full archive."); }
   finally{ S.bgRunning=false; S.bg=false; }
-}
-function shardUrl(m){
-  const s=(S.idx&&S.idx.shards||[]).find(x=>x.month===m);
-  const v=s?`${s.count}-${s.bytes}`:"0";
-  return `${DATA}contracts-${m}.json?v=${encodeURIComponent(v)}`;
 }
 function monthsFor(d1,d2){
   if(S.embedded) return [...S.shards.keys()];
@@ -644,35 +704,7 @@ async function ensureMonths(months){
   if(S.embedded){ rebuild(); return; }
   await loadOverlay();
   loadHistYears(histYearsFor(S.d1,S.d2));   // background: merges on arrival
-  const need=months.filter(m=>!S.shards.has(m));
-  if(!need.length) return;
-  const p=$("#prog"); p.hidden=S.bg; if(!S.bg){p.max=need.length; p.value=0;}
-  const c=$("#count"); const was=c.innerHTML;
-  let done=0;
-  // Fetch shards concurrently. Serially, widening the range to 2021 meant ~60
-  // round trips one after another, which is why it crawled.
-  const LANES=6;
-  const queue=need.slice();
-  async function lane(){
-    for(;;){
-      const m=queue.shift(); if(!m) return;
-      try{
-        const res=await fetch(shardUrl(m),{cache:"force-cache"});
-        S.shards.set(m,res.ok?expand(await res.json()):[]);
-      }catch(e){ S.shards.set(m,[]); }
-      ++done;
-      if(S.bg){ bgsay(`Loading the full archive — ${done} of ${need.length} months…`); }
-      else{ p.value=done; c.innerHTML=`Loading ${done} of ${need.length} months…`; }
-      // Paint partial results as they arrive rather than holding a blank table.
-      if(done===1||done%8===0){
-        rebuild();
-        if(!S.bg) c.innerHTML=`Loading ${done} of ${need.length} months…`;
-      }
-    }
-  }
-  await Promise.all(Array.from({length:Math.min(LANES,need.length)},lane));
-  if(!S.bg){ p.hidden=true; c.innerHTML=was; }
-  rebuild();
+  await loadShards({need:months, url:shardUrl, store:S.shards, noun:"months"});
 }
 function rebuild(){
   // Every shard that has been loaded belongs in the corpus. The date range
@@ -818,6 +850,18 @@ async function boot(){
       '<button class="linkbtn" id="loadall">Load the full archive (about 44 MB)</button>');
     const la=$("#loadall"); if(la) la.onclick=()=>{ bgsay(""); prefetchAll(true); };
   },1200);
+  // The alert list is a few kilobytes, so it is read on load purely to decide
+  // whether the tab deserves a dot. The notice shards themselves wait until
+  // someone actually opens the tab.
+  fetch(DATA+"atm/alerts.json",{cache:"no-cache"})
+    .then(r=>r.ok?r.json():null)
+    .then(j=>{
+      if(!j||!(j.alerts||[]).length) return;
+      S.alerts=j.alerts;
+      const d=$("#alertDot");
+      if(d){ d.hidden=false;
+        $("#tab-n").title=`${j.alerts.length} notice${j.alerts.length===1?"":"s"} matched your watchlist`; }
+    }).catch(()=>{});
   fetch(DATA+"historical/index.json",{cache:"no-cache"})
     .then(r=>r.ok?r.json():null).then(j=>{ if(j){ S.hidx=j; } }).catch(()=>{});
   // AusTender publishes the category as a bare UNSPSC number; the codeset turns
@@ -904,8 +948,9 @@ function filterBadge(){
 function wire(){
   document.querySelectorAll("th[data-s]").forEach(b=>b.closest("th").setAttribute("data-sortable",""));
   let t;
+  const reapply=()=>S.tab==="s"?applySup():S.tab==="n"?applyAtm():apply();
   $("#q").oninput=e=>{clearTimeout(t);t=setTimeout(()=>{S.q=e.target.value.trim().toLowerCase();
-    S.tab==="s"?applySup():apply();},180);};
+    reapply();},180);};
   $("#agency").onchange=e=>{S.agency=e.target.value;apply();};
   $("#sort").onchange=e=>{S.sort=e.target.value;apply();};
   const dch=()=>{
@@ -924,7 +969,8 @@ function wire(){
     if($("#d1")) $("#d1").value=S.d1; if($("#d2")) $("#d2").value=S.d2;
     $("#q").value="";$("#agency").value="";$("#v1").value="";$("#v2").value="";
     document.querySelectorAll(".chip").forEach(c=>c.setAttribute("aria-pressed","false"));
-    S.tab==="s"?applySup():apply();
+    S.nStatus="open"; S.nWatch="";
+    reapply();
   };
   // Clicking a header used to assign the same sort value every time, so it only
   // ever did anything on the first click. Each column now flips its direction.
@@ -941,14 +987,43 @@ function wire(){
   $("#csv").onclick=exportCSV;
   // The two standing notes are worth keeping but not worth the top of the page.
   $("#about").onclick=()=>{
+    const a=S.atmIdx;
     $("#about-b").innerHTML=
       `<div class="note">${$("#scopenote").innerHTML}</div>`+
-      `<div class="note warn">${$("#truthnote").innerHTML}</div>`;
+      `<div class="note warn">${$("#truthnote").innerHTML}</div>`+
+      `<div class="note"><b>Where each figure comes from.</b> Contract notices come from
+       AusTender's OCDS API. Contracts of $100,000 and above are cross-checked against
+       Senate Order snapshots, which AusTender keeps for only three periods before
+       deleting them; where the two disagree, both figures are shown and the contract is
+       flagged rather than reconciled. Records to 2020 come from the Department of
+       Finance's historical extracts, which carry standing-offer and approach-to-market
+       identifiers the live API omits. Entities not bound to report to AusTender — the
+       NDIA among them — are read from their own Senate Order 13 listings.</div>`+
+      `<div class="note"><b>Approaches to market.</b> The Open tenders tab watches
+       AusTender's current-notice feed${a?`, and has been watching since
+       ${esc(fmtDMY(a.capture_start))}`:""}. That feed publishes only what is open right
+       now and keeps no archive, so a notice that opened and closed before this archive
+       started, or between two polls, is not recoverable. An approach is not an award:
+       no value is published until a contract notice appears.</div>`;
     $("#aboutDlg").showModal();
   };
   $("#aboutX").onclick=()=>$("#aboutDlg").close();
   $("#tab-c").onclick=()=>switchTab("c");
   $("#tab-s").onclick=()=>switchTab("s");
+  $("#tab-n").onclick=()=>switchTab("n");
+  document.addEventListener("click",e=>{ if(e.target.id==="aboutN") $("#about").click(); });
+  // The status and watchlist chips live inside a container that is redrawn on
+  // every filter change, so they are handled by delegation rather than by
+  // handlers that would be thrown away with the markup that carried them.
+  $("#alertbar").addEventListener("click",e=>{
+    const st=e.target.closest("[data-ns]"), w=e.target.closest("[data-nw]");
+    if(st){ S.nStatus=st.dataset.ns; applyAtm(); }
+    else if(w){ S.nWatch=(S.nWatch===w.dataset.nw)?"":w.dataset.nw; applyAtm(); }
+  });
+  document.querySelectorAll("th button[data-sn]").forEach(b=>{
+    b.closest("th").setAttribute("data-sortable","");
+    b.onclick=()=>{ S.nDesc=!S.nDesc; applyAtm(); };
+  });
   const sheet=$("#filterSheet");
   $("#filterBtn").onclick=()=>{ if(typeof sheet.showModal==="function") sheet.showModal(); };
   $("#filterCloseX").onclick=()=>sheet.close();
@@ -957,12 +1032,14 @@ function wire(){
 }
 function switchTab(t){
   S.tab=t;
-  if(t==="s") showResults(true);
-  for(const k of ["c","s"]){
+  if(t!=="c") showResults(true);
+  for(const k of ["c","s","n"]){
     $("#tab-"+k).setAttribute("aria-selected",String(t===k));
     $("#pane-"+k).hidden=t!==k;
   }
-  t==="s"?applySup():apply();
+  document.body.classList.toggle("notices",t==="n");
+  if(t==="n"){ loadAtm(); applyAtm(); }
+  else t==="s"?applySup():apply();
 }
 
 /* Senate Order records are the same kind of thing — a Commonwealth contract —
@@ -989,6 +1066,147 @@ async function loadSenate(){
     });
   }catch(e){ S.sen=[]; }
   rebuild();
+}
+
+/* Approaches to market. Every other source here is retrospective — a contract
+   notice exists only once the money is committed — so this is the one view that
+   looks forward. It is deliberately a separate tab rather than merged into the
+   contract corpus: an approach and an award are different kinds of fact, and
+   folding a notice with no value into a table of committed spend would invite
+   exactly the reading the data does not support. */
+const NSTATUS={all:"Everything",open:"Open now",soon:"Closing within 14 days",closed:"Closed"};
+
+async function loadAtm(){
+  if(S.atmIdx!==undefined) return;
+  S.atmIdx=null;
+  try{
+    const r=await fetch(DATA+"atm/index.json",{cache:"no-cache"});
+    if(r.ok) S.atmIdx=await r.json();
+  }catch(e){}
+  try{
+    const r=await fetch(DATA+"atm/alerts.json",{cache:"no-cache"});
+    if(r.ok){ S.alerts=(await r.json()).alerts||[]; }
+  }catch(e){}
+  if(!S.atmIdx){ rebuildAtm(); return; }
+  const years=(S.atmIdx.shards||[]).map(x=>x.year).filter(y=>y!=="unknown");
+  await loadShards({need:years, store:S.atm, noun:"notice years", after:rebuildAtm,
+    url:y=>{
+      const sh=(S.atmIdx.shards||[]).find(x=>x.year===y);
+      return `${DATA}atm/atm-${y}.json?v=${encodeURIComponent(stamp(sh))}`;
+    }});
+}
+function rebuildAtm(){
+  S.atmRows=[];
+  for(const [,rs] of S.atm) if(rs) S.atmRows=S.atmRows.concat(rs);
+  // A notice matched by a watch carries the watch name, so the alert strip can
+  // filter to it without a second pass over the alert list on every keystroke.
+  const byGuid=new Map();
+  for(const a of (S.alerts||[])){
+    if(!byGuid.has(a.guid)) byGuid.set(a.guid,[]);
+    byGuid.get(a.guid).push(a.watch);
+  }
+  for(const r of S.atmRows) r._w=byGuid.get(r.guid)||[];
+  if(S.tab==="n") applyAtm();
+}
+function atmUrl(r){ return `https://www.tenders.gov.au/${r.kind||"Atm"}/Show/${r.guid}`; }
+// Whole calendar days, not elapsed hours. Measuring from the current instant to
+// the end of the closing day made a notice closing tomorrow read "in 2 days".
+function daysTo(d){
+  if(!d) return null;
+  const t=Date.parse(d+"T00:00:00Z");
+  if(isNaN(t)) return null;
+  const today=Date.parse(new Date().toISOString().slice(0,10)+"T00:00:00Z");
+  return Math.round((t-today)/86400000);
+}
+function applyAtm(){
+  showResults(true);
+  const q=S.q, today=new Date().toISOString().slice(0,10);
+  S.atmView=(S.atmRows||[]).filter(r=>{
+    if(q){
+      if(r._h===undefined)
+        r._h=((r.title||"")+" "+(r.atm_id||"")+" "+(r.agency||"")+" "+
+              (r.cat||"")+" "+(r.cat_title||"")+" "+(r.desc||"")).toLowerCase();
+      if(!r._h.includes(q)) return false;
+    }
+    if(S.nWatch&&!(r._w||[]).includes(S.nWatch)) return false;
+    const d=daysTo(r.close);
+    if(S.nStatus==="open"&&!r.open) return false;
+    if(S.nStatus==="closed"&&r.open) return false;
+    if(S.nStatus==="soon"&&!(r.open&&d!=null&&d>=0&&d<=14)) return false;
+    // Only the publication date filter carries over from the contracts view;
+    // value and flag filters describe awards and mean nothing here.
+    if(S.dateTouched){
+      if(S.d1&&(r.publish||"")<S.d1) return false;
+      if(S.d2&&(r.publish||"")>S.d2) return false;
+    }
+    return true;
+  });
+  const dir=S.nDesc?-1:1;
+  S.atmView.sort((a,b)=>{
+    // Open notices first, then soonest to close. A closed notice with no date
+    // must not float to the top of a list about what is still available.
+    if((b.open||0)!==(a.open||0)) return (b.open||0)-(a.open||0);
+    const x=a.close||"9999", y=b.close||"9999";
+    return x<y?-dir:x>y?dir:0;
+  });
+  S.nPage=0;
+  const open=S.atmView.filter(r=>r.open).length;
+  const soon=S.atmView.filter(r=>r.open&&(()=>{const d=daysTo(r.close);return d!=null&&d>=0&&d<=14;})()).length;
+  const ignored=[];
+  if(S.v1!=null||S.v2!=null) ignored.push("value");
+  if(S.flags.size) ignored.push("flag");
+  $("#count").innerHTML=S.atmIdx
+    ?`<b>${S.atmView.length.toLocaleString()}</b> notices · <b>${open.toLocaleString()}</b> open now`+
+     (soon?` · <b>${soon.toLocaleString()}</b> closing within 14 days`:"")+
+     `<span class="t-sub"> · watching since ${esc(fmtDMY(S.atmIdx.capture_start))}</span>`+
+     (ignored.length?`<span class="t-sub"> · ${ignored.join(" and ")} filters do not apply to notices</span>`:"")
+    :"No notice archive found yet — the feed has not been polled.";
+  drawAlertBar();
+  $("#tbn").innerHTML=""; drawAtm(); filterBadge();
+}
+function drawAlertBar(){
+  const names=[...new Set((S.alerts||[]).map(a=>a.watch))];
+  const chip=(label,on,attr)=>`<button class="chip${on?" on":""}" ${attr}>${esc(label)}</button>`;
+  $("#alertbar").innerHTML=
+    Object.keys(NSTATUS).map(k=>chip(NSTATUS[k],(S.nStatus||"open")===k,`data-ns="${k}"`)).join("")+
+    (names.length?'<span class="t-sub" style="margin:0 4px">Watchlist:</span>'+
+      names.map(n=>chip(n,S.nWatch===n,`data-nw="${esc(n)}"`)).join(""):"")+
+    '<a class="t-sub feedlink" style="margin-left:auto" href="./data/atm/alerts.xml">Subscribe to alerts (Atom)</a>';
+}
+function drawAtm(){
+  const part=(S.atmView||[]).slice(S.nPage*S.PER,(S.nPage+1)*S.PER);
+  if(!part.length&&S.nPage===0){
+    $("#tbn").innerHTML='<tr><td colspan="6" class="empty">'+
+      (S.atmRows&&S.atmRows.length?"No notices match these filters."
+        :"Loading approaches to market…")+'</td></tr>';
+    $("#moren").innerHTML=""; return;
+  }
+  $("#tbn").insertAdjacentHTML("beforeend",part.map(r=>{
+    const d=daysTo(r.close);
+    const status=!r.open
+      ?`<span class="n-closed">closed${r.closed?" "+esc(fmtDMY(r.closed)):""}</span>`
+      :(d===0?'<span class="n-soon">closes today</span>'
+        :d!=null&&d>0&&d<=14?`<span class="n-soon">closes in ${d} day${d===1?"":"s"}</span>`
+                            :'<span class="n-open">open</span>');
+    return `<tr>
+    <td class="t-title"><a class="linkbtn" href="${esc(atmUrl(r))}" rel="noopener"
+        target="_blank">${esc(r.title||"(untitled)")}</a>
+      <div class="t-sub">${esc(r.atm_id||"")}${r.kind==="Advert"?" · advert":""}</div></td>
+    <td class="t-party" data-th="Agency">${esc(r.agency||"—")}</td>
+    <td class="t-party hide-m" data-th="Category">${esc(r.cat_title||r.cat||"—")}</td>
+    <td class="hide-m" data-th="Type">${esc(r.atm_type||"—")}</td>
+    <td class="num" data-th="Closes">${esc(fmtDMY(r.close))}</td>
+    <td data-th="Status">${status}${
+      String(r.panel||"").toLowerCase()==="yes"?'<span class="flag" title="A panel arrangement — the approach establishes or draws on a standing panel">panel</span>':""}${
+      String(r.multi_agency||"").toLowerCase()==="yes"?'<span class="flag" title="Open to multiple agencies, not just the one that published it">multi-agency</span>':""}${
+      String(r.multi_stage||"").toLowerCase()==="yes"?'<span class="flag" title="Multi-stage approach">multi-stage</span>':""}${
+      (r._w||[]).map(w=>`<span class="flag" title="Matches your watchlist">${esc(w)}</span>`).join("")}</td>
+  </tr>`;}).join(""));
+  const left=S.atmView.length-(S.nPage+1)*S.PER;
+  $("#moren").innerHTML=left>0
+    ?`<button class="btn-p" id="mbn">Show ${Math.min(left,S.PER)} more (${left.toLocaleString()} left)</button>`
+    :(S.atmView.length?`<span class="count">End of ${S.atmView.length.toLocaleString()} notices.</span>`:"");
+  const mbn=$("#mbn"); if(mbn) mbn.onclick=()=>{S.nPage++;drawAtm();};
 }
 
 // The table is noise before anyone has asked anything, so it stays hidden until
@@ -1212,19 +1430,29 @@ document.addEventListener("click",e=>{
 });
 
 function exportCSV(){
-  const sup=S.tab==="s";
-  const cols=sup?["abn","canonical","names","n","buyers","total"]
-    :["cn","title","buyer","supplier","abn","value","value_first","cur","pub","signed",
-      "start","end","method","cat","amendments","first_seen","last_seen","flags"];
-  const src=sup?S.supView:S.view;
+  // Whatever is on screen is what gets exported. The button is visible on all
+  // three tabs, so it must not quietly hand back a contract export while the
+  // reader is looking at a list of notices.
+  const tab=S.tab;
+  const COLS={
+    s:["abn","canonical","names","n","buyers","total"],
+    n:["atm_id","title","agency","cat","cat_title","atm_type","location","panel",
+       "multi_agency","multi_stage","publish","close","open","closed","desc"],
+    c:["cn","title","buyer","supplier","abn","value","value_first","cur","pub","signed",
+       "start","end","method","cat","amendments","first_seen","last_seen","flags"]
+  };
+  const cols=COLS[tab].slice();
+  const src=tab==="s"?S.supView:tab==="n"?S.atmView:S.view;
   const q=v=>{const s=Array.isArray(v)?v.join(" | "):String(v??"");
     return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;};
   const body=src.map(r=>cols.map(c=>q(r[c])).join(","));
-  if(!sup) cols.push("url"), body.forEach((_,i)=>body[i]+=","+q(cnUrl(src[i].cn)));
+  if(tab==="c"){ cols.push("url"); body.forEach((_,i)=>body[i]+=","+q(cnUrl(src[i].cn))); }
+  if(tab==="n"){ cols.push("url"); body.forEach((_,i)=>body[i]+=","+q(atmUrl(src[i]))); }
   const csv=[cols.join(",")].concat(body).join("\n");
+  const name={s:"suppliers",n:"approaches-to-market",c:"contracts"}[tab];
   const a=document.createElement("a");
   a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));
-  a.download=`legal-tender-${sup?"suppliers":"contracts"}-${new Date().toISOString().slice(0,10)}.csv`;
+  a.download=`legal-tender-${name}-${new Date().toISOString().slice(0,10)}.csv`;
   a.click(); URL.revokeObjectURL(a.href);
 }
 boot();
