@@ -20,17 +20,43 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
+      # Any workflow that writes data/ must not run beside another writer, and
+      # must never commit a half-merged file. Two unguarded writers overlapping
+      # put conflict markers into main and took the site down.
+      - name: Refuse to run alongside another archive writer
+        id: guard
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          busy=0
+          for wf in refresh.yml backfill-resume.yml senate.yml so13.yml; do
+            [ "$wf" = "senate.yml" ] && continue
+            n=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow "$wf" \
+                  --status in_progress --json databaseId --jq 'length' 2>/dev/null || echo 0)
+            busy=$((busy + n))
+          done
+          echo "other archive writers in flight: $busy"
+          [ "$busy" -gt 0 ] && echo "skip=true" >> $GITHUB_OUTPUT || echo "skip=false" >> $GITHUB_OUTPUT
+
       - uses: actions/checkout@v5
+        if: steps.guard.outputs.skip != 'true'
       - uses: actions/setup-python@v6
+        if: steps.guard.outputs.skip != 'true'
         with:
           python-version: "3.12"
       - run: pip install requests openpyxl
+        if: steps.guard.outputs.skip != 'true'
       - run: python senate.py --out data/senate
+        if: steps.guard.outputs.skip != 'true'
       - name: Commit snapshots
+        if: steps.guard.outputs.skip != 'true'
         run: |
           git config user.name "legal-tender-bot"
           git config user.email "legal-tender-bot@users.noreply.github.com"
-          git pull --rebase --autostash origin main || true
+          git pull --rebase --autostash origin main || { git rebase --abort 2>/dev/null || true; }
+          if grep -rlq '^<<<<<<< ' data 2>/dev/null; then
+            echo 'refusing to commit: conflict markers in data/' >&2; exit 1
+          fi
           git add data/senate
           git diff --staged --quiet || git commit -m "Senate Order snapshots $(date -u +%F)"
           git push
