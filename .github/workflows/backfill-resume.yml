@@ -6,9 +6,19 @@ name: Backfill resume
 # checkpoint says the backfill is complete, so leaving it scheduled costs
 # nothing. It runs on GitHub's infrastructure and is unaffected by anything
 # happening on a developer's machine.
+# The schedule is off. The backfill completed on 2 September 2026 and the
+# checkpoint in data/index.json reads {"next": null, "complete": true}, so every
+# firing spun up a runner, checked out the repo, read that line and exited. On a
+# public repo that was free and harmless. On a private one Actions minutes are
+# metered, and 48 runs a day at GitHub's one-minute billing minimum is about
+# 1,440 minutes a month — most of a 2,000-minute quota, spent doing nothing.
+#
+# Nothing else changes: the job is unaltered and still resumes from the
+# checkpoint. To use it, start a backfill and then run this workflow from the
+# Actions tab, or uncomment the schedule for as long as the backfill is running.
 on:
-  schedule:
-    - cron: "*/30 * * * *"
+  # schedule:
+  #   - cron: "*/30 * * * *"
   workflow_dispatch:
 
 permissions:

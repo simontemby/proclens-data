@@ -17,7 +17,11 @@ server, database or hosting bill.
 ## Setup
 
 1. **Pages.** Settings → Pages → Source: *Deploy from a branch* → `main` / root. The
-   site is live at `https://USER.github.io/REPO/` a minute later.
+   site is live at `https://USER.github.io/REPO/` a minute later. Any static host works
+   — the page addresses its data relatively. The only absolute address is the one the
+   Atom feed publishes for itself; set the `PROCLENS_SITE` repository variable to change
+   it. Note that GitHub Pages is public even when served from a private repo, so if the
+   site itself must be access-controlled it needs a host that can sit behind auth.
 2. **Actions write permission.** Settings → Actions → General → Workflow permissions →
    *Read and write*. Without it every workflow builds correctly and then fails to push.
 3. Nothing else. The page looks for `data/` beside itself — same origin, no CORS, no
@@ -62,8 +66,12 @@ python refresh.py --backfill-from 2021-01-01 --backfill-to 2026-01-01 --chunk-da
 python refresh.py --resume            # continues from the checkpoint in index.json
 ```
 
-`backfill-resume.yml` runs that every 30 minutes until the checkpoint is complete. Each
-chunk commits on its own, so an interrupted run loses one chunk rather than everything.
+`backfill-resume.yml` runs that from the Actions tab. Its schedule is switched off: the
+backfill finished on 2 September 2026, and on a private repo — where Actions minutes are
+metered — 48 no-op runs a day at GitHub's one-minute billing minimum is roughly 1,440
+minutes a month spent reading one line of JSON. Uncomment the cron for as long as a
+backfill is actually running. Each chunk commits on its own, so an interrupted run loses
+one chunk rather than everything.
 Note that Actions uses the workflow file from the commit that *triggered* the run: a fix
 pushed after a run starts does not apply to it.
 

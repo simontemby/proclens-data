@@ -5,6 +5,10 @@ disagree with them kept alongside rather than reconciled away.
 
 Live at **https://simontemby.github.io/proclens-data/**
 
+The front end addresses its data relatively, so it runs unchanged on any static host.
+The one place the address is baked in is the Atom feed, which has to state its own
+absolute URL: set the `PROCLENS_SITE` repository variable when the site moves.
+
 Nothing runs on a server. GitHub Actions build the data, GitHub Pages serves it, and
 the whole front end is one `index.html` that fetches static JSON shards.
 
@@ -82,7 +86,7 @@ door lock. Do not re-add one without re-testing it.
 | `senate.yml` | Tuesdays 21:00 UTC | AusTender keeps only three periods before deleting them |
 | `so13.yml` | 1st monthly | Published twice yearly; checking monthly is cheap |
 | `historical.yml` | 8th monthly | Content-hashed, so a repeat run is a no-op |
-| `backfill-resume.yml` | every 30 min | Resumes a chunked backfill from its checkpoint |
+| `backfill-resume.yml` | manual only | Resumes a chunked backfill; schedule off since the backfill completed |
 
 Every writer refuses to start while another is in flight, and refuses to commit a file
 containing conflict markers. Both defences exist because two unguarded writers once

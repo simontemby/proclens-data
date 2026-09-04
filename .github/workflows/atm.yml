@@ -55,6 +55,11 @@ jobs:
 
       - name: Poll the notice feed
         if: steps.guard.outputs.skip != 'true'
+        # Set the PROCLENS_SITE repository variable when the site moves hosts;
+        # it is the address the Atom feed publishes as its own. Unset falls back
+        # to the GitHub Pages URL.
+        env:
+          PROCLENS_SITE: ${{ vars.PROCLENS_SITE }}
         run: |
           python atm.py --out data/atm --watchlist data/watchlist.json \
             ${{ inputs.refresh_detail && '--refresh-detail' || '' }}

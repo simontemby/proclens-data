@@ -35,6 +35,9 @@ import requests
 FEED = os.environ.get("AUSTENDER_ATM_FEED",
                       "https://www.tenders.gov.au/public_data/rss/rss.xml")
 SITE = "https://www.tenders.gov.au"
+# Where this archive is published. Set PROCLENS_SITE to move hosts.
+PUBLISHED_AT = (os.environ.get("PROCLENS_SITE")
+                or "https://simontemby.github.io/proclens-data/")
 # tenders.gov.au refuses a plain requests user agent with a 403; the API host
 # does not. Same organisation, different front door.
 UA = os.environ.get("PROCLENS_BROWSER_UA",
@@ -372,7 +375,10 @@ def main():
     ap = argparse.ArgumentParser(description="Ingest AusTender approaches to market.")
     ap.add_argument("--out", default="data/atm")
     ap.add_argument("--watchlist", default="data/watchlist.json")
-    ap.add_argument("--site", default="https://simontemby.github.io/proclens-data/")
+    # The Atom feed has to state its own absolute address, which is the one thing
+    # here that knows where the site is hosted. Kept out of the code so moving
+    # hosts is a variable, not an edit.
+    ap.add_argument("--site", default=PUBLISHED_AT)
     ap.add_argument("--no-detail", action="store_true",
                     help="skip per-notice page fetches (feed fields only)")
     ap.add_argument("--max-detail", type=int, default=150,
