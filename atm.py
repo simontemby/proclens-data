@@ -260,10 +260,21 @@ def load_watchlist(path):
     return wl.get("watches", []) if isinstance(wl, dict) else []
 
 
+# Agencies publish curly quotes, en dashes and non-breaking spaces. A watch term
+# typed with a straight apostrophe would never match "Analyst's Notebook" as the
+# page actually writes it, so both sides are flattened to the plain characters.
+PUNCT = str.maketrans({"\u2018": "'", "\u2019": "'", "\u201c": '"', "\u201d": '"',
+                       "\u2013": "-", "\u2014": "-", "\u00a0": " "})
+
+
+def norm(s):
+    return re.sub(r"\s+", " ", str(s or "").translate(PUNCT)).lower()
+
+
 def haystack(r):
-    return " ".join(str(r.get(k) or "") for k in
-                    ("atm_id", "title", "desc", "agency", "cat", "cat_title",
-                     "atm_type", "location")).lower()
+    return norm(" ".join(str(r.get(k) or "") for k in
+                         ("atm_id", "title", "desc", "agency", "cat", "cat_title",
+                          "atm_type", "location")))
 
 
 # Terms are matched on word boundaries, not as bare substrings. "ndia" inside
@@ -274,7 +285,7 @@ _TERM_CACHE = {}
 
 
 def term_re(t):
-    t = t.lower()
+    t = norm(t)
     if t not in _TERM_CACHE:
         # A trailing "s" is allowed so a watch on "participant" still catches
         # "participants"; requiring an exact word missed the commoner spelling.
@@ -368,6 +379,9 @@ def main():
                     help="cap detail fetches in one run")
     ap.add_argument("--refresh-detail", action="store_true",
                     help="re-fetch detail for notices already enriched")
+    ap.add_argument("--rematch", action="store_true",
+                    help="re-evaluate every stored notice against the watchlist, "
+                         "for after the watchlist itself has changed")
     args = ap.parse_args()
     os.makedirs(args.out, exist_ok=True)
 
@@ -431,15 +445,27 @@ def main():
     # new watchlist entry does not replay years of history into the feed at once.
     watches = load_watchlist(args.watchlist)
     prior = read_json(os.path.join(args.out, "alerts.json"), {})
-    raised = {(a["watch"], a["guid"]) for a in prior.get("alerts", [])}
-    alerts = list(prior.get("alerts", []))
+    # Alerts raised by a watch that has since been deleted or renamed are dropped.
+    # Leaving them would show results under a rule that no longer exists, and the
+    # chip filtering them on the site would not appear at all.
+    live_names = {w.get("name") or "watch" for w in watches}
+    alerts = [a for a in prior.get("alerts", []) if a.get("watch") in live_names]
+    dropped = len(prior.get("alerts", [])) - len(alerts)
+    if dropped:
+        print(f"  {dropped} alerts dropped: their watch is no longer in the watchlist",
+              file=sys.stderr)
+    raised = {(a["watch"], a["guid"]) for a in alerts}
     fresh = 0
     # Enriched notices are re-checked as well as new ones. A notice seen from the
     # feed alone has no agency, category or panel flag, so a watch that depends
     # on those could never fire for it; if the enrichment lands on a later run,
     # matching only what is new would miss it permanently. The (watch, guid) set
     # keeps the second look from raising anything twice.
-    for guid in dict.fromkeys(new_guids + enriched_guids):
+    # --rematch exists because a watch normally fires only forward. That is right
+    # by default — a new rule should not replay years of history into the feed —
+    # but after editing the watchlist you want to know what it would have caught.
+    candidates = list(store) if args.rematch else dict.fromkeys(new_guids + enriched_guids)
+    for guid in candidates:
         r = store[guid]
         hay = haystack(r)
         for w in watches:

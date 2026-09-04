@@ -55,8 +55,23 @@ written to `data/atm/alerts.json` and to an Atom feed at `data/atm/alerts.xml`, 
 any reader can subscribe to — a feed is the one alerting mechanism a static host can
 actually deliver.
 
-Terms match on word boundaries. They did not at first, and `ndia` matched inside
-"Indian Ocean Territories".
+Terms match on word boundaries with an optional trailing "s", so `participant` catches
+"participants" but `ndia` does not fire inside "Indian Ocean Territories". Curly
+apostrophes and en dashes are flattened first, so a term typed with a straight
+apostrophe still matches "Analyst's Notebook" as the page actually writes it.
+
+Watches fire forward only. To replay an edited watchlist against everything already
+captured:
+
+```bash
+python atm.py --out data/atm --rematch --no-detail
+```
+
+Every term in the watchlist was measured against the 306,542 contract records in this
+archive before being included. The ones that did not survive are recorded in the file
+under `rejected_terms`, with the reason — `intelligence` matched 2,459 records that were
+almost all the ACIC's own name, `kg` is kilograms, `ml` is millilitres, and `cypher` is a
+door lock. Do not re-add one without re-testing it.
 
 ## Schedules
 
