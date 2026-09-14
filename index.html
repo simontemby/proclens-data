@@ -601,20 +601,6 @@ function monthMeta(m){ return S.monthIx&&S.monthIx.get(m); }
 function listUrl(m){ const x=monthMeta(m); return `${CORPUS}list/${m}.json?v=${encodeURIComponent(x?x.list:"0")}`; }
 function detailUrl(m){ const x=monthMeta(m); return `${CORPUS}detail/${m}.json?v=${encodeURIComponent(x?x.detail:"0")}`; }
 
-/* Loading everything is now a convenience for browsing and the Suppliers tab,
-   not a precondition for searching: a query fetches only the months the index
-   says can match. It still runs in the background only where the connection and
-   device can take it. */
-function canPrefetch(){
-  try{
-    const c=navigator.connection||{};
-    if(c.saveData) return false;
-    if(/2g/.test(c.effectiveType||"")||c.effectiveType==="3g") return false;
-    if(typeof navigator.deviceMemory==="number"&&navigator.deviceMemory<4) return false;
-    if(matchMedia&&matchMedia("(max-width:700px)").matches) return false;
-  }catch(e){}
-  return true;
-}
 function bgsay(t){ const e=$("#bgstat"); if(e) e.innerHTML=t||""; }
 
 async function prefetchAll(){
@@ -812,12 +798,12 @@ async function boot(){
 
   buildAgencies(); buildChips(); wire();
   await ensureMonths(monthsFor(S.d1,S.d2));
-  setTimeout(()=>{
-    if(canPrefetch()) prefetchAll();
-    else bgsay('Showing the last three months; searches reach the whole archive. '+
-      '<button class="linkbtn" id="loadall">Load everything for browsing</button>');
-    const la=$("#loadall"); if(la) la.onclick=()=>{ bgsay(""); prefetchAll(); };
-  },1500);
+  // No automatic full download. When search needed the whole archive in memory
+  // it made sense to start fetching it on load; now a search fetches only the
+  // months that can match, and pulling all 1.3 million contracts anyway cost a
+  // desktop reader tens of megabytes and a busy page for no gain.
+  bgsay('Showing the last three months. Searches reach the whole archive. '+
+    '<button class="linkbtn" id="loadall">Load everything for browsing</button>');
   // The alert list is a few kilobytes, so it is read on load purely to decide
   // whether the tab deserves a dot.
   fetch(DATA+"atm/alerts.json",{cache:"no-cache"})
@@ -986,7 +972,10 @@ function wire(){
   $("#tab-c").onclick=()=>switchTab("c");
   $("#tab-s").onclick=()=>switchTab("s");
   $("#tab-n").onclick=()=>switchTab("n");
-  document.addEventListener("click",e=>{ if(e.target.id==="aboutN") $("#about").click(); });
+  document.addEventListener("click",e=>{
+    if(e.target.id==="aboutN") $("#about").click();
+    if(e.target.id==="loadall"){ bgsay(""); prefetchAll(); }
+  });
   // The status and watchlist chips live inside a container that is redrawn on
   // every filter change, so they are handled by delegation rather than by
   // handlers that would be thrown away with the markup that carried them.
@@ -1276,7 +1265,9 @@ function applySup(){
   S.sPage=0;
   const tot=S.supView.reduce((n,s)=>n+(s.total||0),0);
   $("#count").innerHTML=`<b>${S.supView.length.toLocaleString()}</b> suppliers by ABN · `+
-    `<b>${money(tot)}</b> committed`;
+    `<b>${money(tot)}</b> committed`+
+    (S.bgDone?"":`<span class="t-sub"> · from the ${S.months.size} of ${S.cidx.months.length} months loaded. `+
+      `<button class="linkbtn" id="loadall">Load everything</button> for whole-archive totals</span>`);
   $("#tbs").innerHTML=""; drawSup(); filterBadge();
 }
 function drawSup(){
