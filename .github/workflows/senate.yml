@@ -29,7 +29,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           busy=0
-          for wf in refresh.yml backfill-resume.yml senate.yml so13.yml historical.yml atm.yml; do
+          for wf in refresh.yml backfill-resume.yml senate.yml so13.yml historical.yml atm.yml export.yml; do
             [ "$wf" = "senate.yml" ] && continue
             n=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow "$wf" \
                   --status in_progress --json databaseId --jq 'length' 2>/dev/null || echo 0)
@@ -48,6 +48,10 @@ jobs:
         if: steps.guard.outputs.skip != 'true'
       - run: python senate.py --out data/senate
         if: steps.guard.outputs.skip != 'true'
+      # The site reads data/corpus, not the per-source stores, so a new source
+      # file changes nothing a reader can see until the corpus is rebuilt.
+      - run: python build.py
+        if: steps.guard.outputs.skip != 'true'
       - name: Commit snapshots
         if: steps.guard.outputs.skip != 'true'
         run: |
@@ -57,6 +61,6 @@ jobs:
           if grep -rlq '^<<<<<<< ' data 2>/dev/null; then
             echo 'refusing to commit: conflict markers in data/' >&2; exit 1
           fi
-          git add data/senate
+          git add data/senate data/corpus
           git diff --staged --quiet || git commit -m "Senate Order snapshots $(date -u +%F)"
           git push

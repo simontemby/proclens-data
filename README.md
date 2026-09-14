@@ -10,33 +10,88 @@ The one place the address is baked in is the Atom feed, which has to state its o
 absolute URL: set the `PROCLENS_SITE` repository variable when the site moves.
 
 Nothing runs on a server. GitHub Actions build the data, GitHub Pages serves it, and
-the whole front end is one `index.html` that fetches static JSON shards.
+the whole front end is one `index.html` that fetches static JSON.
+
+## Coverage
+
+**1,297,943 contracts, each appearing once**, however many publications carry it.
+Coverage is complete from January 2014. Counted by publication year against Love Me
+Tender, an independent archive of the same AusTender data, as a benchmark rather than a
+ground truth:
+
+| | 2014 | 2015 | 2016 | 2017 | 2018 | 2019 | 2020 | 2021 | 2022 | 2023 | 2024 | 2025 | 2026* |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| Legal Tender | 63,977 | 71,702 | 68,876 | 62,830 | 63,172 | 65,552 | 64,431 | 70,624 | 66,440 | 58,778 | 62,522 | 57,978 | 40,443 |
+| Love Me Tender | 64,635 | 70,022 | 67,772 | 64,934 | 65,079 | 64,769 | 64,753 | 71,262 | 66,324 | 58,274 | 62,414 | 57,683 | 39,243 |
+
+\*to mid-September. 817,325 against 817,164 in total. Where Legal Tender is higher the
+difference is real contracts: in May 2026 the Department of Veterans' Affairs published
+517 separate counselling-services contracts in one day, which Love Me Tender does not
+count. 2017 and 2018 are about 3% lower and not yet explained. Contracts published
+before 2014 come from the Department of Finance extracts and are not complete.
 
 ## What is in here
 
 | Source | Script | What only it has |
 |---|---|---|
-| AusTender OCDS API | `refresh.py` | The current state of every contract notice, weekly |
-| Senate Order snapshots | `senate.py` | Value at each reporting period, and confidentiality provisions |
+| AusTender OCDS API | `refresh.py` | Every contract from 2014, its current value, and its full release history: first value and each amendment's date and value |
+| AusTender weekly export | `export.py` | Why each amendment was made, confidentiality and consultancy with reasons, the ATM and standing offer, supplier location, agency branch |
+| data.gov.au extracts, 2007–2020 | `historical.py` | Contracts the API no longer serves, and the same enrichment fields for their years |
+| Senate Order snapshots | `senate.py` | What each contract was reported as worth at the end of each reporting period |
 | Senate Order 13 listings | `so13.py` | Entities that do not report to AusTender at all — the NDIA among them |
-| data.gov.au extracts, 1999–2020 | `historical.py` | Standing-offer ids, approach-to-market ids, panel flags, amendment lineage |
 | AusTender current-notice feed | `atm.py` | Approaches to market — what is about to be bought |
 
-The first four are merged into one corpus, keyed on the CN id, and searched together.
-Approaches to market are deliberately kept in their own tab: an approach and an award
-are different kinds of fact, and folding a notice carrying no value into a table of
-committed spend invites exactly the reading the data does not support.
+`build.py` merges the first five into one corpus keyed on the CN ID, with a build report
+in `data/corpus/index.json` counting every collision and every contract only one source
+holds. The weekly export and the notice feed are windows, not archives — AusTender
+deletes export files after eighteen months and keeps no history of notices — so both
+stores are permanent from first capture.
 
-## Where the numbers disagree
+## Search
 
-Contracts of $100,000 and above appear in both the OCDS API and the Senate Order
-snapshots, and for about 29,000 of them the two publications report different values.
-Those are flagged `source_disagreement` and **both figures are shown**. They are not
-reconciled, averaged, or silently resolved in favour of one source, because there is no
-basis on which to choose: about 63% look like an API frozen at the original value, and
-the rest do not fit that explanation at all.
+A search does not download the archive. `build.py` writes an index mapping every word to
+the months that contain it; the page looks a query's words up there and fetches only
+those months. Searching a supplier who appears in one month costs one small file.
+
+Every word must match a whole word in the contract's description, agency, supplier, ABN
+or CN ID, except the last, which matches as a prefix while it is being typed: `quant`
+finds Quantexa, and `graph database` does not also mean "graphic database". A query in
+quotes must appear as an exact phrase.
+
+## Senate Order snapshots against the API
+
+A snapshot lists a contract as it stood at the end of its reporting period, so it is
+compared with the value the API's own release history gives for that date, never with
+today's value. Of the contracts where the two still differ:
+
+- **14,836** carry a value in the snapshot that AusTender published only more than 42
+  days after the period ended — a median of 175 days. The agency reported the amendment
+  to the Senate before publishing it; the Commonwealth Procurement Rules allow 42 days.
+  Flagged `late_amendment`.
+- **1,063** carry a value that never appears anywhere in the API's history. Both figures
+  are shown and neither is treated as correct. Flagged `source_disagreement`.
 
 Every flag in this archive is a queue for review, never a finding.
+
+## Corrections
+
+An earlier version of this archive, and of this README, was wrong in ways that affected
+published figures:
+
+- It kept the first release the API returned for each contract, which is the original.
+  **61,504 of 308,675 contracts (19.9%) showed a superseded value.**
+- A later release's date replaced the publication date, moving 477 contracts to the
+  month, often the year, they were amended.
+- Amendments published in the same second were ordered as the API listed them; 2,450
+  contracts showed an earlier amendment's value. They are now ordered by amendment number.
+- Dates were read in UTC. AusTender records a day as Canberra midnight, so every start
+  and end date and about a quarter of publication dates were a day early.
+- The historical extracts' literal `NULL` was stored as a standing-offer and
+  approach-to-market id for most contracts.
+- It reported 29,105 contracts where the API and Senate Order snapshots disagree. Almost
+  all of that was the first bug above and late publication of amendments; see the
+  previous section for the corrected figures.
+- Senate Order 13 contracts were collected but never shown.
 
 ## Approaches to market
 
@@ -82,13 +137,15 @@ door lock. Do not re-add one without re-testing it.
 | Workflow | When | Notes |
 |---|---|---|
 | `refresh.yml` | Sundays 18:00 UTC | The main writer; everything else stands down for it |
+| `export.yml` | Mondays 06:00 UTC | Sunday's contract notice export, and any earlier weeks still listed |
 | `atm.yml` | 02:15, 10:15, 18:15 UTC | Notices and alerts |
 | `senate.yml` | Tuesdays 21:00 UTC | AusTender keeps only three periods before deleting them |
 | `so13.yml` | 1st monthly | Published twice yearly; checking monthly is cheap |
 | `historical.yml` | 8th monthly | Content-hashed, so a repeat run is a no-op |
 | `backfill-resume.yml` | manual only | Resumes a chunked backfill; schedule off since the backfill completed |
 
-Every writer refuses to start while another is in flight, and refuses to commit a file
+Every workflow that changes a source rebuilds the corpus before committing, so the site
+never shows a source the corpus has not absorbed. Every writer refuses to start while another is in flight, and refuses to commit a file
 containing conflict markers. Both defences exist because two unguarded writers once
 overlapped, put conflict markers into `main`, and took the site down.
 
@@ -97,6 +154,8 @@ overlapped, put conflict markers into `main`, and took the site down.
 ```bash
 pip install requests openpyxl
 python refresh.py --data-dir data          # AusTender, incremental
+python export.py --out data/export         # weekly contract notice exports
+python build.py                            # merge everything into data/corpus
 python atm.py --out data/atm               # notices and alerts
 python -m http.server 8765                 # then open http://localhost:8765
 ```

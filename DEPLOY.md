@@ -44,36 +44,39 @@ column showed the supplier, and the title showed an internal purchase-order refe
 
 ## The data layout
 
-Contracts are sharded by month, historical extracts and notices by year. A date filter
-fetches only the shards it needs instead of pulling 163 MB to answer a question about
-one quarter. Each shard's entry in `index.json` carries a **content digest**, which the
-front end stamps into the URL: a changed shard is a different URL, an unchanged one
-still serves from cache. That digest replaced a count-and-byte-size stamp, which could
-not tell two versions apart when a value was corrected to another figure of the same
-length.
+Each ingest script keeps its own store — `data/contracts-*.json` for the API,
+`data/export`, `data/historical`, `data/senate`, `data/so13` — and `build.py` merges them
+into `data/corpus/`, which is all the page reads:
 
-Month shards are immutable — what AusTender said when the archive first saw each
-contract. `updates.json` carries every row that has changed since and is overlaid by
-ocid, so the table shows current truth without rewriting history.
+- `list/YYYY-MM.json` — what the table, filters, totals and CSV need
+- `detail/YYYY-MM.json` — everything else, fetched when a contract is opened
+- `terms/*.json` — word to months, so a search fetches only months that can match
+- `updates.json` — records changed since their month file was written
+- `index.json` — months with content digests, totals, agencies, and the build report
+
+Month files are written once; later changes go to `updates.json` so a week of amendments
+across every year does not rewrite a hundred files in git. `build.py --compact` folds
+them back, and happens automatically past 40,000 changed records. Every file's content
+digest is stamped into its URL, so a changed file is a new URL and an unchanged one
+serves from cache.
+
+The source stores are excluded from the published site by `_config.yml`. Publishing them
+put the site at 975 MB, against GitHub Pages' 1 GB limit, while serving nothing a reader
+could reach.
 
 ## Backfill
 
-The archive covers five years. A full build is long enough to outlast a runner, so it
-is chunked and resumable:
+A full rebuild from the API is chunked and resumable, and fetches several date windows at
+once — the API has answered 18 concurrent requests without refusing one:
 
 ```bash
-python refresh.py --backfill-from 2021-01-01 --backfill-to 2026-01-01 --chunk-days 180
-python refresh.py --resume            # continues from the checkpoint in index.json
+python refresh.py --backfill-from 2013-12-31 --backfill-to 2026-09-15 --chunk-days 365 --workers 16
+python refresh.py --resume --workers 16      # continues from the checkpoint in index.json
 ```
 
-`backfill-resume.yml` runs that from the Actions tab. Its schedule is switched off: the
-backfill finished on 2 September 2026, and on a private repo — where Actions minutes are
-metered — 48 no-op runs a day at GitHub's one-minute billing minimum is roughly 1,440
-minutes a month spent reading one line of JSON. Uncomment the cron for as long as a
-backfill is actually running. Each chunk commits on its own, so an interrupted run loses
-one chunk rather than everything.
-Note that Actions uses the workflow file from the commit that *triggered* the run: a fix
-pushed after a run starts does not apply to it.
+Start a day early: the API's date windows are UTC, and a contract published on the morning
+of 1 January in Canberra falls in 31 December's window. Sixteen workers rebuild 2014 to
+2026 in about two hours.
 
 ## Concurrency
 
@@ -84,7 +87,7 @@ took the site down. `refresh.py` is the priority writer; the others stand down f
 
 ## Size
 
-About 634,000 distinct contracts, 163 MB on disk and ~44 MB gzipped across the shards. That is well
+About 1.3 million contracts. A full load is about 45 MB gzipped, but nothing requires it: searches fetch only matching months. That is well
 inside Pages' soft limits, but the front end still does not load it all by default: it
 opens on the most recent three months and fetches the rest in the background only where
 the browser reports a connection and a device that can take it. Everyone else gets a

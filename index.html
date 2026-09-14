@@ -489,22 +489,25 @@ footer{border-top:1px solid var(--line);margin-top:32px;padding:20px 0 44px;colo
   <p id="prov">—</p>
 </footer>
 
-<!--PROCLENS_BUNDLE_SLOT-->
 <script>
 "use strict";
 const FLAGS={
   late_publish:"Published more than 42 days after signing",
-  value_growth:"Value grew more than 50% since this archive first saw it",
+  value_growth:"Value grew more than 50% since the contract was first published",
   threshold_hugging:"Value sits just under a procurement threshold",
   backdated:"Signed well after the start date",
   limited_tender:"Awarded without open competition",
   long_term:"Runs longer than five years",
   agent_or_trustee:"Supplier name contains an agent, trustee or trading-as entity",
   platform_or_reseller:"A platform, marketplace or reseller — the supplier named is the channel, not necessarily the capability bought",
-  source_disagreement:"The AusTender API and a Senate Order snapshot report different values for this contract"
+  source_disagreement:"A Senate Order snapshot reports a value that never appears anywhere in the AusTender API's history of this contract",
+  late_amendment:"A Senate Order snapshot carried this contract's amended value more than 42 days before AusTender published the amendment",
+  confidential:"The contract or its outputs carry confidentiality provisions",
+  consultancy:"Reported as a consultancy"
 };
 const DATA="./data/";
-const S={idx:null,hidx:null,hist:new Map(),shards:new Map(),rows:[],view:[],sup:[],supView:[],page:0,sPage:0,PER:100,
+const S={cidx:null,monthIx:null,months:new Map(),detail:new Map(),terms:new Map(),upd:null,updDetail:null,
+  rows:[],view:[],sup:[],supView:[],page:0,sPage:0,PER:100,query:null,qRaw:"",searched:null,
   q:"",agency:"",sort:"pub",flags:new Set(),d1:"",d2:"",v1:null,v2:null,tab:"c",
   atm:new Map(),atmRows:[],atmView:[],alerts:[],nPage:0,nStatus:"open",nWatch:"",nDesc:false};
 const $=s=>document.querySelector(s);
@@ -538,55 +541,35 @@ function fmtDMY(v){                      // 02-09-2026
   return m?`${m[3]}-${m[2]}-${m[1]}`:(v?String(v):"—");
 }
 
-/* Shards dictionary-encode their repetitive columns. Decoding assigns the
-   SHARED string, so 6,000 rows referencing one agency hold one string between
-   them rather than 6,000 copies. */
+/* Shards dictionary-encode their repetitive columns. */
 function expand(sh){
-  const f=sh.fields||S.idx.fields||[];
-  const d=sh.dict||null;
-  return (sh.rows||[]).map(r=>{
+  const f=(sh&&sh.fields)||[];
+  const d=(sh&&sh.dict)||null;
+  return ((sh&&sh.rows)||[]).map(r=>{
     const o={};
     for(let i=0;i<f.length;i++){
       const k=f[i]; let v=r[i];
       if(d&&d[k]!==undefined&&typeof v==="number") v=d[k][v];
-      o[k]=v;
+      o[k]=v===undefined?null:v;
     }
     return o;
   });
 }
-/* Month shards mean a date filter fetches only the months it needs, instead of
-   pulling ~100 MB of archive to answer a question about one quarter. The
-   historical extracts (1999-2020) are a second sharded source, by year, fetched
-   only when the date range reaches back into them — so the default recent view
-   never pays for 72 MB. They carry SON ids, ATM ids, panel flags and amendment
-   lineage that no live feed publishes. */
 
 /* ONE loader for every sharded source. This fan-out existed as three near
-   identical copies, which is exactly how the blocking sequential version that
-   made the page crawl came to ship twice: the fix reached one copy and not the
-   others. Sources differ only in which keys they need, how a key becomes a URL,
-   and which Map holds the result. */
+   identical copies, which is how a blocking sequential version shipped twice. */
 const LANES=6;
-/* Shards stopped being immutable the moment backfill chunks began adding rows to
-   existing months, which left browsers pinned to a stale copy no reload would
-   clear. The builder now stamps each shard's own content digest into index.json,
-   so a changed shard is a different URL and an unchanged one still serves from
-   cache. The digest replaced a count-and-byte-size stamp, which could not tell
-   two versions apart when a value was corrected to another figure of the same
-   length — $100,000.00 to $200,000.00 changes neither count nor size. Older
-   index.json files have no digest, so fall back rather than fetch nothing. */
 function stamp(s){ return s?(s.sha||`${s.count}-${s.bytes}`):"0"; }
 
 async function loadShards({need,url,store,noun,lanes=LANES,after=rebuild}){
   need=need.filter(k=>!store.has(k));
   if(!need.length) return;
   const p=$("#prog"); p.hidden=S.bg; if(!S.bg){p.max=need.length; p.value=0;}
-  const c=$("#count"); const was=c.innerHTML;
+  const c=$("#count");
   const queue=need.slice(); let done=0;
   const say=()=>{
-    const msg=`Loading ${done} of ${need.length} ${noun}…`;
     if(S.bg) bgsay(`Loading the full archive — ${done} of ${need.length} ${noun}…`);
-    else c.innerHTML=msg;
+    else c.innerHTML=`Loading ${done} of ${need.length} ${noun}…`;
   };
   async function lane(){
     for(;;){
@@ -598,44 +581,30 @@ async function loadShards({need,url,store,noun,lanes=LANES,after=rebuild}){
       ++done;
       if(!S.bg) p.value=done;
       say();
-      // rebuild() is ~650ms on a laptop over the full corpus and several times
-      // that on a phone, so repaint early then sparingly rather than per shard.
-      if(done===1||done===3||done%6===0||done===need.length) after();
+      if(done===1||done%12===0||done===need.length) after();
     }
   }
   await Promise.all(Array.from({length:Math.min(lanes,need.length)},lane));
-  if(!S.bg){ p.hidden=true; c.innerHTML=was; }
+  if(!S.bg) p.hidden=true;
   after();
 }
 
-function histYearsFor(d1,d2){
-  if(!S.hidx) return [];
-  return (S.hidx.shards||[]).map(x=>x.year).filter(y=>{
-    if(y==="unknown") return false;
-    if(d1&&y<d1.slice(0,4)) return false;
-    if(d2&&y>d2.slice(0,4)) return false;
-    return true;
-  });
-}
-function histUrl(y){
-  const s=(S.hidx&&S.hidx.shards||[]).find(x=>x.year===y);
-  return `${DATA}historical/contracts-${y}.json?v=${encodeURIComponent(stamp(s))}`;
-}
-function loadHistYears(years){
-  // Newest first: the years a reader is most likely to be asking about arrive
-  // before the 1999 extracts nobody scrolled to.
-  return loadShards({need:years.slice().sort().reverse(), url:histUrl,
-                     store:S.hist, noun:"historical years"});
-}
-function shardUrl(m){
-  const s=(S.idx&&S.idx.shards||[]).find(x=>x.month===m);
-  return `${DATA}contracts-${m}.json?v=${encodeURIComponent(stamp(s))}`;
-}
-/* The whole corpus is 163 MB raw, about 44 MB gzipped, across roughly 634,000
-   distinct contracts. That is a reasonable background download on a desktop and a bad
-   one on a phone — both for data cost and because that many row objects is a
-   real memory risk. So it is fetched automatically only where the browser says
-   the connection and device can take it, and offered as a button otherwise. */
+/* ---- the corpus ----------------------------------------------------------
+   build.py merges every source into one record per contract and writes it by
+   month. The page used to download four overlapping sources — 44 MB gzipped,
+   with roughly 290,000 contracts from 2014 to 2020 arriving twice — and then
+   spend five seconds reconciling them in the browser before a search could see
+   the whole archive. The list files carry only what the table, filters and
+   totals need; everything else waits until a contract is opened. */
+const CORPUS=DATA+"corpus/";
+function monthMeta(m){ return S.monthIx&&S.monthIx.get(m); }
+function listUrl(m){ const x=monthMeta(m); return `${CORPUS}list/${m}.json?v=${encodeURIComponent(x?x.list:"0")}`; }
+function detailUrl(m){ const x=monthMeta(m); return `${CORPUS}detail/${m}.json?v=${encodeURIComponent(x?x.detail:"0")}`; }
+
+/* Loading everything is now a convenience for browsing and the Suppliers tab,
+   not a precondition for searching: a query fetches only the months the index
+   says can match. It still runs in the background only where the connection and
+   device can take it. */
 function canPrefetch(){
   try{
     const c=navigator.connection||{};
@@ -648,211 +617,209 @@ function canPrefetch(){
 }
 function bgsay(t){ const e=$("#bgstat"); if(e) e.innerHTML=t||""; }
 
-async function prefetchAll(manual){
+async function prefetchAll(){
   if(S.bgDone||S.bgRunning) return;
   S.bgRunning=true; S.bg=true;
   try{
     bgsay("Loading the full archive in the background…");
-    const months=(S.idx&&S.idx.shards||[]).map(x=>x.month).filter(m=>m!=="unknown");
-    await ensureMonths(months);
-    await loadHistYears(histYearsFor("",""));
+    await ensureMonths(S.cidx.months.map(x=>x.month));
     S.bgDone=true;
-    bgsay(`Full archive loaded — ${S.rows.length.toLocaleString()} contracts searchable.`);
+    bgsay(`Full archive loaded — ${S.rows.length.toLocaleString()} contracts.`);
     setTimeout(()=>bgsay(""),6000);
   }catch(e){ bgsay("Could not finish loading the full archive."); }
   finally{ S.bgRunning=false; S.bg=false; }
 }
 function monthsFor(d1,d2){
-  if(S.embedded) return [...S.shards.keys()];
-  return (S.idx.shards||[]).filter(s=>{
-    if(s.month==="unknown") return false;
-    if(d1&&s.month<d1.slice(0,7)) return false;
-    if(d2&&s.month>d2.slice(0,7)) return false;
+  return S.cidx.months.map(x=>x.month).filter(m=>{
+    if(m==="unknown") return !d1&&!d2;
+    if(d1&&m<d1.slice(0,7)) return false;
+    if(d2&&m>d2.slice(0,7)) return false;
     return true;
-  }).map(s=>s.month);
+  });
 }
-/* A self-contained --embed build carries every row inline; group them into the
-   same month buckets the fetch path uses so both share one code path. */
-function seedFromBundle(b){
-  const f=b.fields||[], rows=(b.rows||[]).map(r=>{const o={};f.forEach((k,i)=>o[k]=r[i]);return o;});
-  const by=new Map();
-  for(const r of rows){
-    const m=(r.pub||"").slice(0,7)||"unknown";
-    if(!by.has(m)) by.set(m,[]);
-    by.get(m).push(r);
-  }
-  S.shards=by;
-}
-/* Month shards are immutable — what AusTender said when we first saw each
-   contract. updates.json carries every row that changed since, and is overlaid
-   by ocid so the table shows current truth without rewriting the shards. */
-async function loadOverlay(){
-  if(S.overlay) return;
-  S.overlay=new Map();
+/* Month files are written once. Records that changed afterwards travel in one
+   small overlay and replace their month-file copy by CN ID as a month loads. */
+async function loadUpdates(){
+  if(S.upd) return;
+  S.upd=new Map(); S.updDetail=new Map();
+  const u=S.cidx.updates||{};
+  if(!u.rows) return;
   try{
-    const r=await fetch(DATA+"updates.json",{cache:"no-cache"});
-    if(r.ok){
-      const u=await r.json(), f=u.fields||S.idx.fields||[];
-      for(const row of u.rows||[]){
-        const o={}; f.forEach((k,i)=>o[k]=row[i]);
-        const key=o.ocid||o.cn; if(key) S.overlay.set(key,o);
-      }
-    }
+    const r=await fetch(`${CORPUS}updates.json?v=${encodeURIComponent(u.sha||"0")}`,{cache:"force-cache"});
+    if(!r.ok) return;
+    const j=await r.json();
+    for(const o of expand(j.list)) S.upd.set(o.cn,o);
+    for(const o of expand(j.detail)) S.updDetail.set(o.cn,o);
   }catch(e){}
 }
 async function ensureMonths(months){
-  if(S.embedded){ rebuild(); return; }
-  await loadOverlay();
-  loadHistYears(histYearsFor(S.d1,S.d2));   // background: merges on arrival
-  await loadShards({need:months, url:shardUrl, store:S.shards, noun:"months"});
+  await loadUpdates();
+  await loadShards({need:months, url:listUrl, store:S.months, noun:"months"});
 }
 function rebuild(){
-  // Every shard that has been loaded belongs in the corpus. The date range
-  // decides what to FETCH; filtering is apply()'s job. Building from the range
-  // instead meant a loaded shard outside it was invisible, so searching a 2024
-  // supplier against a three-month default returned nothing at all.
-  const byCn=new Map();
-  S.rows=[];
-  for(const [,rs] of S.shards){
+  const out=[];
+  for(const [m,rs] of S.months){
     if(!rs) continue;
-    for(let r of rs){
-      const up=S.overlay&&S.overlay.get(r.ocid||r.cn);
-      // Object.assign also copies the _p cache marker, which would leave the
-      // merged row carrying the BASE row's flags and growth. Force a recompute.
-      if(up){ r=Object.assign({},r,up); r._p=undefined; }
-      if(r._p===undefined){
+    for(let i=0;i<rs.length;i++){
+      let r=rs[i];
+      if(r._m===undefined){
+        const u=S.upd&&S.upd.get(r.cn);
+        if(u) r=rs[i]=u;
+        r._m=m;
         r._f=(r.flags||"").split(",").filter(Boolean);
-        r._g=(r.value&&r.value_first&&r.value_first>0)?(r.value/r.value_first-1):0;
-        r._p=1;
+        // A missing first value means the value never changed.
+        if(r.value_first==null) r.value_first=r.value;
+        r._g=(r.value&&r.value_first>0)?(r.value/r.value_first-1):0;
       }
-      r.src="austender";
-      byCn.set(r.cn,r);
+      out.push(r);
     }
   }
-  for(const [,rows] of (S.hist||new Map())){
-    for(const h of rows){
-      const ex=byCn.get(h.cn);
-      const extra={son:h.son, atm:h.atm, panel:h.panel, consult:h.consult,
-                   consult_reason:h.consult_reason, hist_amendments:h.amendments,
-                   hist_years:h.years};
-      if(ex){
-        Object.assign(ex,extra);
-        ex.src=ex.src==="senate"?"senate+historical":"both";
-        ex.v_hist=h.value;
-        if(h.value!=null&&ex.value!=null&&Math.round(h.value*100)!==Math.round(ex.value*100)){
-          ex.disagree=true;
-          if(ex._f.indexOf("source_disagreement")<0) ex._f=ex._f.concat("source_disagreement");
-          ex.flags=(ex.flags?ex.flags+",":"")+"source_disagreement";
-        }
-        ex._h=undefined;
-      }
-      else byCn.set(h.cn,Object.assign({
-        cn:h.cn, title:h.title, buyer:h.agency, supplier:h.supplier, abn:h.abn,
-        value:h.value, value_first:h.value_first, cur:"AUD",
-        pub:h.pub, start:h.start, end:h.end, cat:h.cat, method:h.method,
-        conf_contract:h.conf, conf_reason:h.conf_reason,
-        agency_ref:h.agency_ref, flags:"", src:"historical",
-        _f:[], _g:(h.value&&h.value_first&&h.value_first>0)?(h.value/h.value_first-1):0, _p:1
-      },extra));
-    }
-  }
-  // Merge, do not append. A CN present in both sources is one contract: the
-  // AusTender record enriched with the confidentiality and dated value history
-  // only the Senate Order snapshots carry.
-  for(const o of (S.sen||[])){
-    const ex=byCn.get(o.cn);
-    if(ex){
-      ex.src="both";
-      ex.conf_contract=o.conf_contract; ex.conf_reason=o.conf_reason;
-      ex.conf_outputs=o.conf_outputs; ex.conf_out_reason=o.conf_out_reason;
-      ex.observations=o.observations; ex.periods=o.periods;
-      if(ex.value_first==null) ex.value_first=o.value_first;
-      // Two arms of government reporting different figures for the same
-      // contract is itself the finding, so keep both rather than letting one
-      // quietly win. The API stays the displayed value because it is the live
-      // record — and because picking by load order made the figure change
-      // depending on which shards happened to be in memory.
-      ex.v_api=ex.value;
-      ex.v_senate=o.value;
-      if(o.value!=null&&ex.value!=null&&Math.round(o.value*100)!==Math.round(ex.value*100)){
-        ex.disagree=true;
-        ex.disagree_period=(o.periods||[]).slice(-1)[0]||"";
-        if(ex._f.indexOf("source_disagreement")<0) ex._f=ex._f.concat("source_disagreement");
-        ex.flags=(ex.flags?ex.flags+",":"")+"source_disagreement";
-      }
-      ex._h=undefined;
-    }else{
-      byCn.set(o.cn,{
-        cn:o.cn, title:o.title, buyer:o.agency, supplier:o.supplier, abn:o.abn,
-        value:o.value, value_first:o.value_first, cur:"AUD",
-        pub:o.pub, start:o.start, end:o.end, cat:o.cat, method:"",
-        conf_contract:o.conf_contract, conf_reason:o.conf_reason,
-        conf_outputs:o.conf_outputs, conf_out_reason:o.conf_out_reason,
-        observations:o.observations, periods:o.periods,
-        agency_ref:o.agency_ref, flags:"", src:"senate",
-        _f:[], _g:(o.value&&o.value_first&&o.value_first>0)?(o.value/o.value_first-1):0, _p:1
-      });
-    }
-  }
-  S.rows=[...byCn.values()];
-  buildAgencies(); apply();
+  S.rows=out;
+  apply();
 }
 
-async function boot(){
-  const emb=window.__PROCLENS_BUNDLE__||null;
-  let idx=emb?.index||null;
-  if(emb){ S.embedded=true; seedFromBundle(emb); }
-  if(!idx){
-    try{ const r=await fetch(DATA+"index.json",{cache:"no-cache"}); if(r.ok) idx=await r.json(); }catch(e){}
+/* ---- search --------------------------------------------------------------
+   A query is words. A contract matches when every word begins a word of its
+   title, agency, supplier, ABN or CN ID — so "quant" finds Quantexa and "graph
+   database" needs both words. Put a query in quotes for the exact phrase.
+
+   terms/ maps every indexed word to the months that contain it. A search looks
+   its words up there first and fetches only those months, so finding a supplier
+   who appears in three months costs three small files instead of the archive.
+   tokenize() must stay identical to tokens() in build.py: a word indexed
+   differently from how it is matched here would skip a month that holds a match. */
+function tokenize(s){
+  const out=[];
+  for(const t of String(s||"").toLowerCase().match(/[a-z0-9]+/g)||[]){
+    if(t.length<2||t.length>40) continue;
+    if(/^\d+$/.test(t)&&t.length>4&&t.length!==11) continue;
+    out.push(t);
   }
+  return out;
+}
+function indexable(w){ return w.length>=2&&w.length<=40&&!(/^\d+$/.test(w)&&w.length>4&&w.length!==11); }
+function parseQuery(raw){
+  const q=String(raw||"").trim();
+  const m=q.match(/^"(.+)"$/);
+  const words=[...new Set(q.toLowerCase().match(/[a-z0-9]+/g)||[])];
+  // Only the word still being typed matches as a prefix. Treating every word as
+  // a prefix made "graph database" also mean "graphic database", which put the
+  // query in 121 months for two results.
+  const prefixLast=!/[\s"]$/.test(String(raw||""));
+  return {raw:q, words, phrase:m?(m[1].toLowerCase().match(/[a-z0-9]+/g)||[]).join(" "):"",
+          isPrefix:w=>prefixLast&&w===words[words.length-1]};
+}
+const rowText=r=>`${r.title||""} ${r.buyer||""} ${r.supplier||""} ${r.abn||""} ${r.cn||""}`;
+function matches(r,qq){
+  if(!qq||!qq.words.length) return true;
+  if(r._t===undefined) r._t=" "+tokenize(rowText(r)).join(" ")+" ";
+  let loose=!!qq.phrase;
+  for(const w of qq.words){
+    if(indexable(w)){ if(r._t.indexOf(qq.isPrefix(w)?" "+w:" "+w+" ")<0) return false; }
+    else loose=true;
+  }
+  if(loose){
+    // Words the index cannot hold — a single letter, a purchase-order number —
+    // and quoted phrases are checked against the full text.
+    if(r._n===undefined) r._n=" "+(rowText(r).toLowerCase().match(/[a-z0-9]+/g)||[]).join(" ")+" ";
+    for(const w of qq.words) if(!indexable(w)&&r._n.indexOf(w)<0) return false;
+    if(qq.phrase&&r._n.indexOf(" "+qq.phrase)<0) return false;
+  }
+  return true;
+}
+function shardKey(w){
+  if(/^cn\d+$/.test(w)) return w.length>=5?"cn"+w.slice(2,5):null;
+  return w.slice(0,2);
+}
+async function termShard(key){
+  const have=S.terms.get(key);
+  if(have) return have;
+  const sha=(S.cidx.terms||{})[key];
+  if(!sha){ S.terms.set(key,{}); return {}; }
+  const p=fetch(`${CORPUS}terms/${key}.json?v=${sha}`,{cache:"force-cache"})
+    .then(r=>r.ok?r.json():{}).catch(()=>({}));
+  S.terms.set(key,p);
+  const j=await p; S.terms.set(key,j); return j;
+}
+/* The months that can hold a match, or null when no word can narrow it. */
+async function monthsForQuery(qq){
+  let need=null;
+  for(const w of qq.words){
+    if(!indexable(w)) continue;
+    const key=shardKey(w); if(!key) continue;
+    const sh=await termShard(key);
+    const hit=new Set();
+    if(qq.isPrefix(w)){ for(const t in sh) if(t.startsWith(w)) for(const i of sh[t]) hit.add(i); }
+    else for(const i of (sh[w]||[])) hit.add(i);
+    need=need===null?hit:new Set([...need].filter(i=>hit.has(i)));
+    if(!need.size) break;
+  }
+  return need===null?null:[...need].sort((a,b)=>b-a).map(i=>S.cidx.months[i].month);
+}
+let searchSeq=0;
+async function runSearch(){
+  const seq=++searchSeq;
+  S.query=parseQuery(S.qRaw);
+  if(!S.query.words.length){ S.searched=null; return reapply(); }
+  let months=await monthsForQuery(S.query);
+  if(seq!==searchSeq) return;
+  const narrowed=months!==null;
+  if(!narrowed) months=S.cidx.months.map(x=>x.month);
+  if(S.dateTouched){ const ok=new Set(monthsFor(S.d1,S.d2)); months=months.filter(m=>ok.has(m)); }
+  S.searched={months:months.length, narrowed};
+  if(months.some(m=>!S.months.has(m))&&!S.bg)
+    $("#count").innerHTML=`Searching ${months.length.toLocaleString()} month${months.length===1?"":"s"} that can match…`;
+  await ensureMonths(months);
+  if(seq===searchSeq) reapply();
+}
+const reapply=()=>S.tab==="s"?applySup():S.tab==="n"?applyAtm():apply();
+
+async function boot(){
+  let idx=null;
+  try{ const r=await fetch(CORPUS+"index.json",{cache:"no-cache"}); if(r.ok) idx=await r.json(); }catch(e){}
   if(!idx){
     $("#count").textContent="Could not load the archive index.";
     $("#tb").innerHTML='<tr><td colspan="8" class="empty">No archive found. '+
-      'Run the refresh workflow to build <code>data/</code>.</td></tr>';
+      'Run the build workflow to create <code>data/corpus/</code>.</td></tr>';
     return;
   }
-  S.idx=idx;
-  const cov=idx.coverage||{}, t=idx.totals||{};
-  // Default to the most recent three months so a first paint is fast; the date
-  // filter pulls more on demand.
-  const all=(idx.shards||[]).map(s=>s.month).filter(m=>m!=="unknown").sort();
-  const recent=all.slice(-3);
-  S.d1=(recent[0]||cov.from||"")+"-01";
-  S.d2=cov.to||"";
+  S.cidx=idx;
+  S.monthIx=new Map(idx.months.map(m=>[m.month,m]));
+  const t=idx.totals||{};
+  const dated=idx.months.map(m=>m.month).filter(m=>m!=="unknown").sort();
+  const today=todayISO();
+  const recent=dated.filter(m=>m<=today.slice(0,7)).slice(-3);
+  S.d1=(recent[0]||"")+"-01";
+  S.d2=today;
   S.d1def=S.d1; S.d2def=S.d2;   // untouched defaults, so a real filter is detectable
   $("#d1").value=S.d1; $("#d2").value=S.d2;
-  $("#d1").min=$("#d2").min=(all[0]||"")+"-01"; $("#d1").max=$("#d2").max=cov.to||"";
+  $("#d1").min=$("#d2").min=(dated[0]||"")+"-01";
 
-  $("#scopenote").innerHTML=`<b>Archive covers ${esc(fmtDMY(cov.from))} to ${esc(fmtDMY(cov.to))}</b> — `+
-    `${(t.contracts||0).toLocaleString()} contracts, ${(t.suppliers_by_abn||0).toLocaleString()} `+
-    `suppliers by ABN, ${money(t.value_aud)} committed. Showing the most recent three months; `+
-    `widen the date filter to load more.`;
-  $("#truthnote").innerHTML=`<b>What this archive can and cannot show.</b> AusTender's API `+
-    `publishes only each contract's current state — there is no amendment history. `+
-    `Values before <b>${esc(fmtDMY(idx.archive_start))}</b>, when this archive started, are not `+
-    `recoverable, so "observed growth" means growth seen since then, not a contract's full life. `+
-    `Values are committed at award, not amounts paid. Panel and standing-offer relationships, `+
-    `and subcontractors, are not published in this feed.`;
-  $("#prov").textContent=`Generated ${fmtDMY(idx.generated)} `+
-    `${String(idx.generated||"").slice(11,19)} UTC · `+
-    `archive started ${fmtDMY(idx.archive_start)} · ${(idx.shards||[]).length} monthly shards.`;
+  const years=Object.entries(t.by_year||{}).filter(([y])=>/^\d{4}$/.test(y)&&y>="2014");
+  $("#scopenote").innerHTML=`<b>${(t.contracts||0).toLocaleString()} contracts</b>, `+
+    `${money(t.value_aud)} committed, each appearing once however many sources publish it. `+
+    `Coverage is complete from January 2014${years.length?` (${years.map(([y,n])=>`${y}: ${n.toLocaleString()}`).join(", ")})`:""}. `+
+    `Showing the most recent three months; a search reaches the whole archive.`;
+  $("#truthnote").innerHTML=`<b>What this archive can and cannot show.</b> Values are committed at `+
+    `award, not amounts paid. Each contract's first value, amendment dates and amended values come `+
+    `from AusTender's own release history. The reason for an amendment, confidentiality, `+
+    `consultancy status and the approach to market it came from are published only in AusTender's `+
+    `weekly export, kept for eighteen months, so they are present where that export or the `+
+    `historical extracts cover the contract and absent otherwise. Subcontractors are not published.`;
+  $("#prov").textContent=`Built ${fmtDMY(idx.generated)} `+
+    `${String(idx.generated||"").slice(11,19)} UTC · ${idx.months.length} months · `+
+    `${Object.keys(idx.terms||{}).length.toLocaleString()} search-index files.`;
 
-  buildChips(); wire();
-  if(S.embedded){
-    // Show the whole embedded archive rather than the default recent window.
-    S.d1=""; S.d2=""; $("#d1").value=""; $("#d2").value="";
-  }
+  buildAgencies(); buildChips(); wire();
   await ensureMonths(monthsFor(S.d1,S.d2));
-  loadSenate();   // background: merges into the same corpus when it arrives
   setTimeout(()=>{
     if(canPrefetch()) prefetchAll();
-    else bgsay('Showing the last three months. '+
-      '<button class="linkbtn" id="loadall">Load the full archive (about 44 MB)</button>');
-    const la=$("#loadall"); if(la) la.onclick=()=>{ bgsay(""); prefetchAll(true); };
-  },1200);
+    else bgsay('Showing the last three months; searches reach the whole archive. '+
+      '<button class="linkbtn" id="loadall">Load everything for browsing</button>');
+    const la=$("#loadall"); if(la) la.onclick=()=>{ bgsay(""); prefetchAll(); };
+  },1500);
   // The alert list is a few kilobytes, so it is read on load purely to decide
-  // whether the tab deserves a dot. The notice shards themselves wait until
-  // someone actually opens the tab.
+  // whether the tab deserves a dot.
   fetch(DATA+"atm/alerts.json",{cache:"no-cache"})
     .then(r=>r.ok?r.json():null)
     .then(j=>{
@@ -862,14 +829,11 @@ async function boot(){
       if(d){ d.hidden=false;
         $("#tab-n").title=`${j.alerts.length} notice${j.alerts.length===1?"":"s"} matched your watchlist`; }
     }).catch(()=>{});
-  fetch(DATA+"historical/index.json",{cache:"no-cache"})
-    .then(r=>r.ok?r.json():null).then(j=>{ if(j){ S.hidx=j; } }).catch(()=>{});
   // AusTender publishes the category as a bare UNSPSC number; the codeset turns
-  // "43200000" into words. Historical rows already carry the title.
-  fetch(DATA+"historical/unspsc.json",{cache:"no-cache"})
+  // "43200000" into words.
+  fetch(CORPUS+"unspsc.json",{cache:"no-cache"})
     .then(r=>r.ok?r.json():null)
-    .then(j=>{ if(j&&j.codes){ S.unspsc=j.codes; apply(); } }).catch(()=>{});
-  if(emb?.suppliers){ S.sup=emb.suppliers; S.supBuiltFrom=-1; }
+    .then(j=>{ if(j&&j.codes){ S.unspsc=j.codes; } }).catch(()=>{});
 }
 
 /* suppliers.json was precomputed from the AusTender store alone and capped at
@@ -910,14 +874,14 @@ function buildSuppliersFromCorpus(){
    thrown away. */
 
 function buildAgencies(){
-  const c=new Map();
-  for(const r of S.rows) if(r.buyer) c.set(r.buyer,(c.get(r.buyer)||0)+1);
+  // From the build's count over the whole corpus, so the list does not depend on
+  // which months happen to be loaded.
   const sel=$("#agency"), keep=sel.value;
   sel.innerHTML='<option value="">All agencies</option>';
-  [...c.entries()].sort((a,b)=>b[1]-a[1]).forEach(([n,k])=>{
+  for(const [n,k] of (S.cidx.agencies||[])){
     const o=document.createElement("option");
     o.value=n; o.textContent=`${n} (${k.toLocaleString()})`; sel.append(o);
-  });
+  }
   sel.value=keep;
 }
 function buildChips(){
@@ -948,15 +912,16 @@ function filterBadge(){
 function wire(){
   document.querySelectorAll("th[data-s]").forEach(b=>b.closest("th").setAttribute("data-sortable",""));
   let t;
-  const reapply=()=>S.tab==="s"?applySup():S.tab==="n"?applyAtm():apply();
-  $("#q").oninput=e=>{clearTimeout(t);t=setTimeout(()=>{S.q=e.target.value.trim().toLowerCase();
-    reapply();},180);};
+  $("#q").oninput=e=>{clearTimeout(t);t=setTimeout(()=>{
+    S.qRaw=e.target.value; S.q=S.qRaw.trim().toLowerCase();
+    S.tab==="n"?applyAtm():runSearch();},180);};
   $("#agency").onchange=e=>{S.agency=e.target.value;apply();};
   $("#sort").onchange=e=>{S.sort=e.target.value;apply();};
   const dch=()=>{
     S.d1=$("#d1").value; S.d2=$("#d2").value;
     S.dateTouched=(S.d1!==S.d1def)||(S.d2!==S.d2def);
-    ensureMonths(monthsFor(S.d1,S.d2));
+    if(S.query&&S.query.words.length) runSearch();
+    else ensureMonths(monthsFor(S.d1,S.d2));
   };
   $("#d1").onchange=dch; $("#d2").onchange=dch;
   const vch=()=>{const a=parseFloat($("#v1").value),b=parseFloat($("#v2").value);
@@ -964,7 +929,7 @@ function wire(){
   $("#v1").oninput=()=>{clearTimeout(t);t=setTimeout(vch,250);};
   $("#v2").oninput=()=>{clearTimeout(t);t=setTimeout(vch,250);};
   $("#reset").onclick=()=>{
-    S.q="";S.agency="";S.v1=S.v2=null;S.flags.clear();S.dateTouched=false;
+    S.q="";S.qRaw="";S.query=null;S.searched=null;S.agency="";S.v1=S.v2=null;S.flags.clear();S.dateTouched=false;
     S.d1=S.d1def; S.d2=S.d2def;
     if($("#d1")) $("#d1").value=S.d1; if($("#d2")) $("#d2").value=S.d2;
     $("#q").value="";$("#agency").value="";$("#v1").value="";$("#v2").value="";
@@ -991,14 +956,24 @@ function wire(){
     $("#about-b").innerHTML=
       `<div class="note">${$("#scopenote").innerHTML}</div>`+
       `<div class="note warn">${$("#truthnote").innerHTML}</div>`+
-      `<div class="note"><b>Where each figure comes from.</b> Contract notices come from
-       AusTender's OCDS API. Contracts of $100,000 and above are cross-checked against
-       Senate Order snapshots, which AusTender keeps for only three periods before
-       deleting them; where the two disagree, both figures are shown and the contract is
-       flagged rather than reconciled. Records to 2020 come from the Department of
-       Finance's historical extracts, which carry standing-offer and approach-to-market
-       identifiers the live API omits. Entities not bound to report to AusTender — the
-       NDIA among them — are read from their own Senate Order 13 listings.</div>`+
+      `<div class="note"><b>Where each figure comes from.</b> Every contract appears once,
+       keyed on its CN ID, however many publications carry it. The list of contracts and
+       their current values come from AusTender's OCDS API, which is complete from January
+       2014; a contract's first value, amendment dates and amended values come from that
+       API's own release history. AusTender's weekly contract notice export adds why each
+       amendment was made, confidentiality, consultancy status, and the approach to
+       market and standing offer behind it — but AusTender deletes those files after
+       eighteen months, so these fields are present only where the export or the
+       Department of Finance historical extracts cover a contract. Senate Order snapshots
+       are compared with the API's value on each snapshot's own date, not with today's
+       value, so an amendment published after a snapshot is not counted as a
+       disagreement. Entities that do not report to AusTender, the NDIA among them,
+       appear from their own Senate Order 13 listings.</div>`+
+       `<div class="note"><b>How search works.</b> Every word must begin a word in the
+       contract's description, agency, supplier, ABN or CN ID, so <i>quant</i> finds
+       Quantexa and <i>graph database</i> needs both words. Put a query in "quotes" for
+       the exact phrase. A search looks its words up in an index and fetches only the
+       months that can match, so it does not wait for the archive to download.</div>`+
       `<div class="note"><b>Approaches to market.</b> The Open tenders tab watches
        AusTender's current-notice feed${a?`, and has been watching since
        ${esc(fmtDMY(a.capture_start))}`:""}. That feed publishes only what is open right
@@ -1039,33 +1014,8 @@ function switchTab(t){
   }
   document.body.classList.toggle("notices",t==="n");
   if(t==="n"){ loadAtm(); applyAtm(); }
+  else if(S.query&&S.query.words.length) runSearch();
   else t==="s"?applySup():apply();
-}
-
-/* Senate Order records are the same kind of thing — a Commonwealth contract —
-   so they belong in the same corpus and the same search box. They are merged on
-   CN ID rather than appended: 1,115 contracts appear in both sources and would
-   otherwise be counted twice. Loaded in the background after first paint, since
-   the file is 15 MB and nothing should wait on it. */
-async function loadSenate(){
-  if(S.sen) return;
-  try{
-    const r=await fetch(DATA+"senate/contracts.json",{cache:"no-cache"});
-    if(!r.ok){ S.sen=[]; return; }
-    const b=await r.json(), f=b.fields||[], d=b.dict||{}, plist=d._periods||[];
-    S.sen=(b.rows||[]).map(row=>{
-      const o={};
-      for(let i=0;i<f.length;i++){
-        const k=f[i]; let v=row[i];
-        if(d[k]!==undefined&&k!=="_periods"&&typeof v==="number") v=d[k][v];
-        o[k]=v;
-      }
-      o.periods=(o.periods||[]).map(i=>typeof i==="number"?plist[i]:i);
-      o.observations=(o.observations||[]).map(x=>[typeof x[0]==="number"?plist[x[0]]:x[0],x[1]]);
-      return o;
-    });
-  }catch(e){ S.sen=[]; }
-  rebuild();
 }
 
 /* Approaches to market. Every other source here is retrospective — a contract
@@ -1223,46 +1173,34 @@ function showResults(on){
 function apply(){
   if(S.tab==="s") return applySup();
   showResults(hasQuery());
-  const q=S.q;
+  const qq=S.query;
   S.view=S.rows.filter(r=>{
-    // Built on first search only, then cached on the row.
-    if(q){
-      if(r._h===undefined)
-        r._h=((r.title||"")+" "+(r.supplier||"")+" "+(r.buyer||"")+" "+
-              (r.cn||"")+" "+(r.abn||"")).toLowerCase();
-      if(!r._h.includes(q)) return false;
-    }
+    if(!matches(r,qq)) return false;
     if(S.agency&&r.buyer!==S.agency) return false;
     // Only filter on dates once the user has actually set them. The default
-    // range exists to decide which shards load first, not to hide matches:
-    // searching a 2024 supplier against a three-month default returned zero.
+    // range exists to decide which months load first, not to hide matches.
     if(S.dateTouched){
-      if(S.d1&&(r.pub||"")<S.d1) return false;
-      if(S.d2&&(r.pub||"")>S.d2) return false;
+      if(S.d1&&(r.pub||r.start||"")<S.d1) return false;
+      if(S.d2&&(r.pub||r.start||"")>S.d2) return false;
     }
     if(S.v1!=null&&!(r.value>=S.v1)) return false;
     if(S.v2!=null&&!(r.value<=S.v2)) return false;
     for(const f of S.flags) if(!r._f.includes(f)) return false;
     return true;
   });
-  const s=S.sort;
-  S.view.sort((a,b)=>
-    s==="value"?(b.value||0)-(a.value||0):
-    s==="value_asc"?(a.value||0)-(b.value||0):
-    s==="growth"?b._g-a._g:
-    s==="pub_asc"?String(a.pub||"").localeCompare(String(b.pub||"")):
-    s==="start"?String(b.start||"").localeCompare(String(a.start||"")):
-    s==="start_asc"?String(a.start||"9999").localeCompare(String(b.start||"9999")):
-    s==="end"?String(a.end||"9999").localeCompare(String(b.end||"9999")):
-    s==="end_desc"?String(b.end||"").localeCompare(String(a.end||"")):
-    String(b.pub||"").localeCompare(String(a.pub||"")));
+  // Plain comparison, not localeCompare: these are ISO dates and numbers, and
+  // localeCompare across several hundred thousand rows cost most of a second.
+  const s=S.sort, cmp=(x,y)=>x<y?-1:x>y?1:0;
+  const key={value:r=>r.value||0, value_asc:r=>r.value||0, growth:r=>r._g,
+    pub:r=>r.pub||"", pub_asc:r=>r.pub||"", start:r=>r.start||"", start_asc:r=>r.start||"9999",
+    end:r=>r.end||"9999", end_desc:r=>r.end||""}[s]||(r=>r.pub||"");
+  const desc=["value","growth","pub","start","end_desc"].includes(s)||!["value_asc","pub_asc","start_asc","end"].includes(s);
+  S.view.sort(desc?(a,b)=>cmp(key(b),key(a)):(a,b)=>cmp(key(a),key(b)));
   S.page=0;
   // Only AUD rows are summed; a mixed-currency total would be meaningless.
-  // "Committed" is everything ever awarded in this selection. "Still running"
-  // counts only contracts whose end date has not yet passed, which is the live
-  // obligation rather than the historical total. Contracts with no end date are
-  // left out of the running figure rather than guessed at, and counted so the
-  // gap is visible.
+  // "Committed" is everything awarded in this selection; "still running" only
+  // contracts whose end date has not yet passed. Contracts with no end date are
+  // counted separately rather than guessed at.
   const today=todayISO();
   let tot=0,non=0,live=0,liveN=0,noEnd=0;
   for(const r of S.view){
@@ -1273,7 +1211,10 @@ function apply(){
     if(!e) noEnd++;
     else if(e>=today){ live+=v; liveN++; }
   }
-  $("#count").innerHTML=`<b>${S.view.length.toLocaleString()}</b> of ${S.rows.length.toLocaleString()} loaded `+
+  const scope=S.searched
+    ?(S.searched.narrowed?` in the ${S.searched.months.toLocaleString()} month${S.searched.months===1?"":"s"} that can match`:" across the archive")
+    :` of ${S.rows.length.toLocaleString()} loaded`;
+  $("#count").innerHTML=`<b>${S.view.length.toLocaleString()}</b> contracts${scope} `+
     `· <b>${money(tot)}</b> committed`+
     ` · <b title="Contracts whose end date has not yet passed">${money(live)}</b> still running`+
     `<span class="t-sub"> (${liveN.toLocaleString()} contracts${noEnd?`, ${noEnd.toLocaleString()} with no end date`:""})</span>`+
@@ -1284,27 +1225,14 @@ function draw(){
   const max=Math.max(...S.view.slice(0,400).map(r=>r.value||0),1);
   const part=S.view.slice(S.page*S.PER,(S.page+1)*S.PER);
   if(!part.length&&S.page===0){
-    // A search usually misses because the date range is narrow, not because
-    // nothing exists. Say how many matches sit outside it.
     let extra="";
-    if(S.q){
-      const wider=S.rows.filter(r=>{
-        if(r._h===undefined)
-          r._h=((r.title||"")+" "+(r.supplier||"")+" "+(r.buyer||"")+" "+
-                (r.cn||"")+" "+(r.abn||"")).toLowerCase();
-        return r._h.includes(S.q);
-      }).length;
-      if(wider>0&&S.dateTouched) extra='<div style="margin-top:12px"><b>'+wider.toLocaleString()+
-        '</b> match'+(wider===1?"":"es")+' outside the current date range.'+
-        '<div style="margin-top:10px"><button class="btn-p" id="widen">Search the whole archive</button></div></div>';
-      else if(!S.sen) extra='<div class="t-sub" style="margin-top:10px">Still loading the '+
-        'Senate Order archive — results may fill in shortly.</div>';
-    }
+    if(S.query&&S.query.words.length&&S.dateTouched)
+      extra='<div style="margin-top:12px">The date range may be hiding matches.'+
+        '<div style="margin-top:10px"><button class="btn-p" id="widen">Search every date</button></div></div>';
     $("#tb").innerHTML='<tr><td colspan="8" class="empty">No contracts match these filters.'+extra+'</td></tr>';
     const w=$("#widen");
     if(w) w.onclick=()=>{
-      S.d1=""; S.d2=""; $("#d1").value=""; $("#d2").value="";
-      ensureMonths(monthsFor("",""));
+      S.d1=""; S.d2=""; $("#d1").value=""; $("#d2").value=""; S.dateTouched=false; runSearch();
     };
     $("#more").innerHTML=""; return;
   }
@@ -1323,9 +1251,9 @@ function draw(){
     <td class="hide-m num" data-th="Start">${esc(fmtMY(r.start))}</td>
     <td class="hide-m num" data-th="End">${esc(fmtMY(r.end))}</td>
     <td data-th="Flags">${r._f.map(f=>`<span class="flag" title="${esc(FLAGS[f]||f)}">${esc(f.replace(/_/g," "))}</span>`).join("")}${
-      r.src==="senate"?'<span class="flag" title="From a Senate Order snapshot — $100,000 and above, outside the AusTender API window">senate order</span>':""}${
-      String(r.conf_contract||"").toUpperCase().startsWith("Y")?'<span class="flag" title="Contract contains confidentiality provisions">confidential</span>':""}${
-      (r.observations||[]).length>1?'<span class="flag" title="Reported value changed between reporting periods">value moved</span>':""}</td>
+      r.amendments?`<span class="flag" title="Amended ${r.amendments} time${r.amendments===1?"":"s"} since publication">amended ×${r.amendments}</span>`:""}${
+      /so13/.test(r.src||"")?'<span class="flag" title="Published under Senate Order 13 by an entity that does not report to AusTender">outside AusTender</span>':
+      (r.src==="historical"?'<span class="flag" title="Present only in the Department of Finance historical extracts">historical extract</span>':"")}</td>
   </tr>`;}).join(""));
   const left=S.view.length-(S.page+1)*S.PER;
   $("#more").innerHTML=left>0
@@ -1337,13 +1265,13 @@ function draw(){
 function applySup(){
   // Rebuild whenever the corpus has changed, so the tab never lags the search.
   if(!S.sup||S.supBuiltFrom!==S.rows.length) buildSuppliersFromCorpus();
-  const q=S.q;
   S.supView=(S.sup||[]).filter(s=>{
     if(S.v1!=null&&!(s.total>=S.v1)) return false;
     if(S.v2!=null&&!(s.total<=S.v2)) return false;
     if(S.flags.has("agent_or_trustee")&&!s.agent) return false;
-    if(!q) return true;
-    return (s.abn||"").includes(q)||(s.names||[]).some(n=>n.toLowerCase().includes(q));
+    const qq=S.query;
+    if(!qq||!qq.words.length) return true;
+    return (s.names||[]).some(n=>matches({title:n,abn:s.abn},qq));
   });
   S.sPage=0;
   const tot=S.supView.reduce((n,s)=>n+(s.total||0),0);
@@ -1373,60 +1301,90 @@ function drawSup(){
   const mbs=$("#mbs"); if(mbs) mbs.onclick=()=>{S.sPage++;drawSup();};
 }
 
-document.addEventListener("click",e=>{
+/* Everything beyond the table row lives in the month's detail file, fetched
+   the first time a contract from that month is opened. */
+async function detailFor(r){
+  if(S.updDetail&&S.updDetail.has(r.cn)) return S.updDetail.get(r.cn);
+  let m=S.detail.get(r._m);
+  if(!m){
+    m=fetch(detailUrl(r._m),{cache:"force-cache"}).then(x=>x.ok?x.json():{})
+      .then(j=>new Map(expand(j).map(o=>[o.cn,o]))).catch(()=>new Map());
+    S.detail.set(r._m,m);
+  }
+  m=await m; S.detail.set(r._m,m);
+  return m.get(r.cn)||{};
+}
+const SRC={api:"AusTender API",export:"AusTender weekly export",historical:"Department of Finance historical extracts",
+  senate:"Senate Order snapshots",so13:"Senate Order 13 listing"};
+const yes=v=>/^(y|yes|true)$/i.test(String(v||"").trim());
+
+document.addEventListener("click",async e=>{
   const sb=e.target.closest("button[data-abn]");
-  if(sb){ switchTab("c"); $("#q").value=sb.dataset.abn; S.q=sb.dataset.abn.toLowerCase(); apply(); return; }
+  if(sb){ switchTab("c"); $("#q").value=sb.dataset.abn; S.qRaw=sb.dataset.abn; S.q=S.qRaw.toLowerCase(); runSearch(); return; }
   const b=e.target.closest("button[data-cn]"); if(!b) return;
   const r=S.rows.find(x=>x.cn===b.dataset.cn); if(!r) return;
   $("#dlg-t").textContent=r.title||r.cn||"Contract";
-  const rows=[["CN number",r.cn],["Agency",r.buyer],["Supplier",r.supplier],
-    ["Supplier ABN",r.abn],["Value",money(r.value)+((r.cur||"AUD")!=="AUD"?" "+r.cur:"")],
-    ["First seen at",r.value_first!=null&&r.value_first!==r.value?money(r.value_first):null],
-    ["Amendments observed",r.amendments||null],
-    ["Published",fmtDMY(r.pub)],["Signed",fmtDMY(r.signed)],
+  $("#dlg-b").innerHTML='<dd class="t-sub">Loading…</dd>';
+  $("#dlg").showModal();
+  const d=await detailFor(r);
+  const so13=/so13/.test(r.src||"");
+  const loc=[d.supplier_city,d.supplier_postcode,d.supplier_country].filter(Boolean).join(" ");
+  const rows=[
+    [so13?"Listing id":"CN number",so13?String(r.cn).split(":").slice(1).join(":"):r.cn],
+    ["Agency",r.buyer],["Branch",d.agency_branch],["Division",d.agency_division],
+    ["Supplier",r.supplier],["Supplier ABN",r.abn],["Supplier location",loc],
+    ["Value",money(r.value)+((r.cur||"AUD")!=="AUD"?" "+r.cur:"")],
+    ["Value at publication",r.value_first!=null&&r.value_first!==r.value?money(r.value_first):null],
+    ["Amendments",r.amendments||null],["Last amended",fmtDMY(d.amended)],
+    ["Published",fmtDMY(r.pub)],["Signed",fmtDMY(d.signed)],
     ["Start",fmtDMY(r.start)],["End",fmtDMY(r.end)],
-    ["Procurement method",r.method],
-    ["Category",catLabel(r.cat)+(/^\d+$/.test(String(r.cat||""))?` (UNSPSC ${esc(r.cat)})`:"")],
-    ["First seen by archive",fmtDMY(r.first_seen)],["Last seen",fmtDMY(r.last_seen)],
-    ["Confidentiality — contract",r.conf_contract],["Reason",r.conf_reason],
-    ["Confidentiality — outputs",r.conf_outputs],["Reason (outputs)",r.conf_out_reason],
-    ["Reporting periods",(r.periods||[]).join(", ")],
-    ["Standing offer (SON)",r.son],["Approach to market (ATM)",r.atm],
-    ["Panel arrangement",r.panel],["Consultancy",r.consult],
-    ["Consultancy reason",r.consult_reason],
-    ["Also in",r.src==="both"?"AusTender API and Senate Order snapshots"
-      :r.src==="senate"?"Senate Order snapshots only":null]];
-  let h=rows.filter(([,v])=>v!=null&&v!=="").map(([k,v])=>`<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("");
+    ["Procurement method",d.method],
+    ["Category",d.category||(d.cat?catLabel(d.cat)+(/^\d+$/.test(String(d.cat))?` (UNSPSC ${d.cat})`:""):null)],
+    ["Agency reference",d.agency_ref],
+    ["Approach to market (ATM)",d.atm],["Standing offer (SON)",d.son],["Panel arrangement",d.panel],
+    ["Consultancy",d.consultancy],["Consultancy reason",d.consultancy_reason],
+    ["Confidentiality — contract",d.conf_contract],["Reason",d.conf_contract_reason],
+    ["Confidentiality — outputs",d.conf_outputs],["Reason (outputs)",d.conf_outputs_reason],
+    ["Reported under",so13?`Senate Order 13 — ${d.so13_entity||r.buyer}, ${d.so13_period||""}`:null],
+    ["Contract type",d.so13_type],["Variations",d.so13_variations],["Suppliers approached",d.so13_approached],
+    ["First seen by this archive",fmtDMY(d.first_seen)],
+    ["Published by",(r.src||"").split(",").filter(Boolean).map(x=>SRC[x]||x).join("; ")]];
+  let h=rows.filter(([,v])=>v!=null&&v!==""&&v!=="—").map(([k,v])=>`<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("");
   if(r._f.length) h+="<dt>Flags</dt><dd>"+r._f.map(f=>
     `<div><b>${esc(f.replace(/_/g," "))}</b> — ${esc(FLAGS[f]||"")}</div>`).join("")+"</dd>";
-  if(r.disagree){
-    const rows2=[["AusTender API",r.v_api],["Senate Order snapshot",r.v_senate],
-                 ["Historical extract",r.v_hist]].filter(x=>x[1]!=null);
-    h+='<dt>Sources disagree</dt><dd>'+
-      rows2.map(x=>`<div>${esc(x[0])} — <b>${money(x[1])}</b></div>`).join("")+
-      `<div class="t-sub" style="margin-top:6px">The figure shown above is the `+
-      `AusTender API's, which is the live record. Both are Commonwealth `+
-      `publications of the same contract. In about 63% of cases with a `+
-      `multi-period trail the API matches the earliest snapshot, which is what an `+
-      `amendment the API has not reflected would look like — but a third do not `+
-      `fit that pattern, so there is no single explanation. Treat it as a record `+
-      `worth checking, not as evidence of anything.</div></dd>`;
-  }
-  // The dated value trail exists only in the Senate Order snapshots.
-  if((r.observations||[]).length>1)
-    h+="<dt>Value history</dt><dd>"+r.observations.map(o=>
-      `<div>${esc(o[0])} — <b>${money(o[1])}</b></div>`).join("")+
-      '<div class="t-sub" style="margin-top:6px">What the contract was reported as '+
-      'worth in each period\'s snapshot.</div></dd>';
-  if((r.hist_amendments||[]).length)
-    h+="<dt>Amendment history</dt><dd>"+r.hist_amendments.map(a=>
+  // The API's own release history: what the contract was worth at each publication.
+  if((d.trail||[]).length>1)
+    h+="<dt>Value history</dt><dd>"+d.trail.map((t,i)=>
+      `<div>${esc(fmtDMY(t[0]))} — <b>${money(t[1])}</b>${i===0?' <span class="t-sub">published</span>':""}</div>`).join("")+
+      '<div class="t-sub" style="margin-top:6px">From AusTender\'s release history: the value as published originally and at each amendment.</div></dd>';
+  // Only the weekly export says WHY a contract was amended.
+  if((d.amend_trail||[]).length)
+    h+="<dt>Amendment reasons</dt><dd>"+d.amend_trail.map(a=>
+      `<div>${esc(a[0])} · ${esc(fmtDMY(a[1]))} — <b>${a[2]!=null?money(a[2]):"?"}</b>`+
+      `${a[3]?`<div class="t-sub">${esc(a[3])}</div>`:""}</div>`).join("")+
+      '<div class="t-sub" style="margin-top:6px">From AusTender\'s weekly export, which is kept for eighteen months, so older amendments may be missing here.</div></dd>';
+  if((d.hist_amendments||[]).length)
+    h+="<dt>Amendments in the historical extracts</dt><dd>"+d.hist_amendments.map(a=>
       `<div>${esc(fmtDMY(a[1]))} — <b>${a[2]!=null?money(a[2]):"?"}</b>`+
-      `${a[3]!=null?` (total ${money(a[3])})`:""}`+
-      `${a[4]?`<div class="t-sub">${esc(a[4])}</div>`:""}</div>`).join("")+
-      '<div class="t-sub" style="margin-top:6px">From the published historical '+
-      'extracts. Cumulative totals are shown only where the source published them.</div></dd>';
-  h+=`<dt>Source</dt><dd><a href="${esc(cnUrl(r.cn))}" target="_blank" rel="noopener">Find on AusTender</a></dd>`;
-  $("#dlg-b").innerHTML=h; $("#dlg").showModal();
+      `${a[3]!=null?` (total ${money(a[3])})`:""}${a[4]?`<div class="t-sub">${esc(a[4])}</div>`:""}</div>`).join("")+"</dd>";
+  if((d.senate_obs||[]).length){
+    const bad=new Map((d.senate_mismatch||[]).map(x=>[x[0],x]));
+    h+="<dt>Senate Order snapshots</dt><dd>"+d.senate_obs.map(o=>{
+      const m=bad.get(o[0]);
+      return `<div>${esc(o[0])} — <b>${money(o[1])}</b>`+
+        (!m?"":m[3]==="later"
+          ?` <span class="flag">AusTender published this value ${m[4]} days after the period ended; it showed ${money(m[2])} on that date</span>`
+          :` <span class="flag">never published on AusTender; it showed ${money(m[2])} on that date</span>`)+"</div>";
+    }).join("")+
+      '<div class="t-sub" style="margin-top:6px">Each snapshot lists the contract as at the end of its reporting period, '+
+      'and is compared with the value AusTender\'s own release history gives for that same date. Where the snapshot\'s '+
+      'figure turns up in AusTender only afterwards, the agency reported the amendment to the Senate before publishing '+
+      'it; the Commonwealth Procurement Rules allow 42 days. Where the figure never appears in AusTender at all, both '+
+      'are Commonwealth publications of the same contract and neither is treated as correct.</div></dd>';
+  }
+  const link=so13?d.so13_source:cnUrl(r.cn);
+  if(link) h+=`<dt>Source</dt><dd><a href="${esc(link)}" target="_blank" rel="noopener">${so13?"Open the listing":"Find on AusTender"}</a></dd>`;
+  $("#dlg-b").innerHTML=h;
 });
 
 function exportCSV(){
@@ -1438,15 +1396,15 @@ function exportCSV(){
     s:["abn","canonical","names","n","buyers","total"],
     n:["atm_id","title","agency","cat","cat_title","atm_type","location","panel",
        "multi_agency","multi_stage","publish","close","open","closed","desc"],
-    c:["cn","title","buyer","supplier","abn","value","value_first","cur","pub","signed",
-       "start","end","method","cat","amendments","first_seen","last_seen","flags"]
+    c:["cn","title","buyer","supplier","abn","value","value_first","cur","pub",
+       "start","end","amendments","flags","src"]
   };
   const cols=COLS[tab].slice();
   const src=tab==="s"?S.supView:tab==="n"?S.atmView:S.view;
   const q=v=>{const s=Array.isArray(v)?v.join(" | "):String(v??"");
     return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;};
   const body=src.map(r=>cols.map(c=>q(r[c])).join(","));
-  if(tab==="c"){ cols.push("url"); body.forEach((_,i)=>body[i]+=","+q(cnUrl(src[i].cn))); }
+  if(tab==="c"){ cols.push("url"); body.forEach((_,i)=>body[i]+=","+q(/:/.test(src[i].cn)?"":cnUrl(src[i].cn))); }
   if(tab==="n"){ cols.push("url"); body.forEach((_,i)=>body[i]+=","+q(atmUrl(src[i]))); }
   const csv=[cols.join(",")].concat(body).join("\n");
   const name={s:"suppliers",n:"approaches-to-market",c:"contracts"}[tab];

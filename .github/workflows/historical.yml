@@ -18,7 +18,7 @@ concurrency:
 jobs:
   ingest:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 150
     steps:
       - name: Refuse to run alongside another archive writer
         id: guard
@@ -26,7 +26,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           busy=0
-          for wf in refresh.yml backfill-resume.yml senate.yml so13.yml historical.yml atm.yml; do
+          for wf in refresh.yml backfill-resume.yml senate.yml so13.yml historical.yml atm.yml export.yml; do
             [ "$wf" = "historical.yml" ] && continue
             n=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow "$wf" \
                   --status in_progress --json databaseId --jq 'length' 2>/dev/null || echo 0)
@@ -45,6 +45,10 @@ jobs:
         if: steps.guard.outputs.skip != 'true'
       - run: python historical.py --out data/historical
         if: steps.guard.outputs.skip != 'true'
+      # The site reads data/corpus, not the per-source stores, so a new source
+      # file changes nothing a reader can see until the corpus is rebuilt.
+      - run: python build.py
+        if: steps.guard.outputs.skip != 'true'
       - name: Commit extracts
         if: steps.guard.outputs.skip != 'true'
         run: |
@@ -54,6 +58,6 @@ jobs:
           if grep -rlq '^<<<<<<< ' data 2>/dev/null; then
             echo 'refusing to commit: conflict markers in data/' >&2; exit 1
           fi
-          git add data/historical
+          git add data/historical data/corpus
           git diff --staged --quiet || git commit -m "Historical extracts $(date -u +%F)"
           git push

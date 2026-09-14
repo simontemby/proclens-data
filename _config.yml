@@ -1,0 +1,19 @@
+# GitHub Pages builds this repository with Jekyll, which publishes every file it
+# is not told to leave out, and a published Pages site may not exceed 1 GB.
+#
+# The page reads only data/corpus, data/atm and data/watchlist.json. Everything
+# below is pipeline input: the per-source stores the ingest scripts keep and
+# build.py merges. Publishing them roughly doubled the site to 975 MB, within
+# weeks of the limit, while serving nothing a reader could reach.
+exclude:
+  - "*.py"
+  - requirements.txt
+  - data/historical
+  - data/export
+  - data/senate
+  - data/so13
+  - data/contracts-*.json
+  - data/updates.json
+  - data/changes.json
+  - data/suppliers.json
+  - data/index.json

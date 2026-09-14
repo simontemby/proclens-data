@@ -48,7 +48,14 @@ SOURCES = [
     ("2018-19", f"{BASE}/ce6b8183-e881-49d4-a367-0851bbb025bf/download/cn-parent-and-amendments-2018-19-30082019.xlsx"),
     ("2017-18", f"{BASE}/bc2097b7-8116-4e9d-9953-98813635892a/download/17-18-fy-dataset.csv"),
     ("2016-17", f"{BASE}/21212500-169f-4745-86b3-6ac1c1174151/download/2016-2017-australian-government-contract-data.csv"),
+    ("2015-16", f"{BASE}/293b97f5-25f6-4667-aa3e-fd7ddbdec363/download/20152016-fy-austender-cns.zip"),
     ("2014-15", f"{BASE}/561a549b-5a65-450e-86cf-81d392d8fef3/download/20142015fy.csv"),
+    # Every notice and amendment published from July 2007 to 30 August 2019, in
+    # one 271 MB workbook. The yearly files above skip FY2013-14 and earlier
+    # altogether, which left the first half of 2014 almost empty. Contracts and
+    # amendments are keyed on their ids, so its overlap with the yearly files
+    # adds nothing twice.
+    ("to-2019-08-30", f"{BASE}/ec0ac429-a813-4325-bc8c-a8e37401ffc0/download/cn-parent-and-amendments-30092019-ltr.xlsx"),
 ]
 
 UNSPSC_URL = (f"{BASE}/bae9cb73-1500-4d45-a862-eac2706cfbd4/download/"
@@ -93,6 +100,14 @@ FIELDS = ["cn", "agency", "supplier", "abn", "title", "cat", "unspsc", "method",
 
 
 def fetch(url):
+    # A directory of already-downloaded files, named as data.gov.au names them,
+    # spares a 271 MB download when rebuilding locally.
+    cache = os.environ.get("PROCLENS_HIST_CACHE")
+    if cache:
+        local = os.path.join(cache, url.rsplit("/", 1)[-1])
+        if os.path.exists(local):
+            with open(local, "rb") as fh:
+                return fh.read()
     r = requests.get(url, headers={"User-Agent": UA}, timeout=TIMEOUT)
     r.raise_for_status()
     return r.content
@@ -110,6 +125,17 @@ def clean_id(v):
     return "" if s.lower() in NULLISH else s
 
 
+def txt(v, limit=None):
+    """Every text field, not only ids, gets the NULLISH treatment. Stripping it
+    from ids alone left the cumulative 2007-2019 file recording the word NULL as
+    the standing offer of 628,823 contracts and the approach to market of
+    654,165, which read as 95% of contracts having both."""
+    s = re.sub(r"\s+", " ", str(v or "")).strip()
+    if s.lower() in NULLISH:
+        return ""
+    return s[:limit] if limit else s
+
+
 def as_money(v):
     if isinstance(v, (int, float)):
         return round(float(v), 2)
@@ -125,7 +151,7 @@ def as_money(v):
 def as_date(v):
     if isinstance(v, datetime):
         return v.date().isoformat()
-    if not v:
+    if not v or str(v).strip().lower() in NULLISH:
         return None
     s = str(v).strip()
     for f in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y",
@@ -198,33 +224,33 @@ def parse(blob, url, label):
         # stripping it when Parent Contract ID is absent or NULL.
         if not parent:
             parent = re.sub(r"-A\d+$", "", cid, flags=re.I)
-        ntype = str(c("ntype") or "").strip().lower()
+        ntype = txt(c("ntype")).lower()
         out.append({
             "cid": cid, "parent": parent,
-            "agency": str(c("agency") or "").strip(),
-            "supplier": str(c("supplier") or "").strip(),
+            "agency": txt(c("agency")),
+            "supplier": txt(c("supplier")),
             "abn": re.sub(r"\D", "", str(c("abn") or "")),
-            "title": str(c("title") or "").strip(),
-            "cat": str(c("cat") or "").strip(),
-            "unspsc": str(c("unspsc") or "").strip(),
-            "method": str(c("method") or "").strip(),
-            "son": str(c("son") or "").strip(),
-            "atm": str(c("atm") or "").strip(),
-            "panel": str(c("panel") or "").strip(),
-            "conf": str(c("conf") or "").strip(),
-            "conf_reason": str(c("conf_reason") or "").strip()[:160],
-            "consult": str(c("consult") or "").strip(),
-            "consult_reason": str(c("consult_reason") or "").strip()[:160],
-            "state": str(c("state") or "").strip(),
-            "country": str(c("country") or "").strip(),
-            "agency_ref": str(c("agency_ref") or "").strip(),
+            "title": txt(c("title")),
+            "cat": txt(c("cat")),
+            "unspsc": txt(c("unspsc")),
+            "method": txt(c("method")),
+            "son": txt(c("son")),
+            "atm": txt(c("atm")),
+            "panel": txt(c("panel")),
+            "conf": txt(c("conf")),
+            "conf_reason": txt(c("conf_reason"), 160),
+            "consult": txt(c("consult")),
+            "consult_reason": txt(c("consult_reason"), 160),
+            "state": txt(c("state")),
+            "country": txt(c("country")),
+            "agency_ref": txt(c("agency_ref")),
             "pub": as_date(c("pub")), "start": as_date(c("start")),
             "end": as_date(c("end")),
             "value": as_money(c("value")),
             "ntype": ntype,
             "adate": as_date(c("adate")),
             "avalue": as_money(c("avalue")),
-            "areason": str(c("areason") or "").strip()[:140],
+            "areason": txt(c("areason"), 140),
             "year": label,
         })
     return out

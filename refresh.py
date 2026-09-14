@@ -32,6 +32,8 @@ Two date axes, used for different jobs:
                           windows older than roughly two years. Used weekly.
 """
 import argparse, hashlib, json, os, re, sys, time
+from concurrent.futures import ThreadPoolExecutor
+from zoneinfo import ZoneInfo
 from datetime import date, datetime, timedelta, timezone
 from collections import Counter, defaultdict
 
@@ -50,7 +52,7 @@ RETRIES = 4
 # 64 bytes a row they would add ~17% to an archive already near 100 MB.
 FIELDS = ["ocid", "cn", "title", "buyer", "supplier", "abn", "value",
           "value_first", "cur", "pub", "signed", "start", "end", "method", "cat",
-          "amendments", "first_seen", "last_seen", "flags"]
+          "amendments", "amended", "trail", "first_seen", "last_seen", "flags"]
 
 # Fields whose change between observations is itself the finding.
 WATCHED = ("value", "supplier", "abn", "end", "start", "method", "title", "buyer")
@@ -134,24 +136,43 @@ def windows(start, end, days=WINDOW_DAYS):
         cur = nxt
 
 
-def releases(since, until, axis="contractPublished", quiet=False):
-    """Yield OCDS releases in a period, following cursor pagination."""
-    for a, b in windows(since, until):
-        path = f"/findByDates/{axis}/{api_ts(a)}/{api_ts(b)}"
-        page, guard, n = path, 0, 0
-        while page and guard < 400:
-            data = get(page)
-            batch = data.get("releases", [])
-            n += len(batch)
-            for pkg in batch:
-                yield pkg
-            nxt = (data.get("links") or {}).get("next")
-            page = nxt if nxt and nxt != page else None
-            guard += 1
-            if page:
-                time.sleep(PAUSE)
+def fetch_window(a, b, axis):
+    """Every release in one window, following cursor pagination to the end."""
+    out, page, guard = [], f"/findByDates/{axis}/{api_ts(a)}/{api_ts(b)}", 0
+    while page and guard < 400:
+        data = get(page)
+        out.extend(data.get("releases", []))
+        nxt = (data.get("links") or {}).get("next")
+        page = nxt if nxt and nxt != page else None
+        guard += 1
+        if page:
+            time.sleep(PAUSE)
+    if guard >= 400:
+        # A window that hits the page guard has been truncated. Saying nothing
+        # would record it as covered when it is not.
+        raise RuntimeError(f"{a} → {b}: pagination guard hit; window is incomplete")
+    return out
+
+
+def releases(since, until, axis="contractPublished", quiet=False, workers=1):
+    """Yield OCDS releases in a period, window by window, in date order.
+
+    Windows are independent, so a deep backfill can fetch several at once. Each
+    worker still paginates its own window one page at a time with the usual
+    pause, so the load on the API grows with the worker count and no faster. At
+    one worker, seven years is several hours of waiting on a single socket.
+    """
+    wins = list(windows(since, until))
+    if workers <= 1:
+        results = (fetch_window(a, b, axis) for a, b in wins)
+    else:
+        pool = ThreadPoolExecutor(max_workers=workers)
+        results = pool.map(lambda w: fetch_window(w[0], w[1], axis), wins)
+    for (a, b), batch in zip(wins, results):
         if not quiet:
-            print(f"  {a} → {b}  {n}", file=sys.stderr)
+            print(f"  {a} → {b}  {len(batch)}", file=sys.stderr, flush=True)
+        for pkg in batch:
+            yield pkg
 
 
 # ---------------------------------------------------------------- mapping
@@ -169,8 +190,33 @@ def dig(o, *path, default=None):
     return o
 
 
+# Canberra keeps Sydney time. Needed on every date the API publishes, not just
+# timestamps that look like times.
+AU_TZ = ZoneInfo("Australia/Sydney")
+
+
 def as_date(v):
-    return str(v)[:10] if v else None
+    """The calendar date in Canberra, which is the date AusTender means.
+
+    The API writes dates as UTC instants, and records a day as local midnight: a
+    contract ending 30 June 2021 arrives as 2021-06-29T14:00:00Z. Cutting the
+    first ten characters therefore put every start and end date a day early, and
+    any notice published in the Australian evening or early morning on the day
+    before. One contract's award date appeared both ways across its releases,
+    2016-06-14T04:27:25Z and 2016-06-13T14:00:00Z, which are the same day in
+    Canberra and two different days in UTC.
+    """
+    if not v:
+        return None
+    s = str(v)
+    if "T" in s:
+        try:
+            dt = datetime.fromisoformat(s.replace("Z", "+00:00"))
+            if dt.tzinfo is not None:
+                return dt.astimezone(AU_TZ).date().isoformat()
+        except ValueError:
+            pass
+    return s[:10]
 
 
 def as_money(v):
@@ -229,7 +275,11 @@ def to_row(rel):
         "value": value,
         # Currency is carried so mixed-currency rows are never silently summed.
         "cur": (dig(contract, "value", "currency") or "AUD").upper(),
-        "pub": as_date(rel.get("date")),
+        # The release date is when THIS release was published, which for an
+        # amendment is the amendment date. awards[].date carries the contract's
+        # original publication on every release, including a contract whose
+        # original release is missing and only amendments survive.
+        "pub": as_date(award.get("date") or rel.get("date")),
         "signed": as_date(contract.get("dateSigned")),
         "start": as_date(period.get("startDate")),
         "end": as_date(period.get("endDate")),
@@ -239,6 +289,75 @@ def to_row(rel):
         "cat": str(dig(contract, "items", 0, "classification", "id")
                    or tender.get("mainProcurementCategory") or "").strip(),
     }
+
+
+AMEND_NO = re.compile(r"-A(\d+)$", re.I)
+
+
+def release_order(rel):
+    """Amendment number first, publication time second.
+
+    Timestamps alone cannot order a contract's history: AusTender republished
+    some contracts' entire amendment series in one batch, so CN3350299 carries
+    seventy amendments stamped with the same second, returned in no particular
+    order. The amendment id (CN3350299-A21) is the real sequence. Taking the
+    last release the API happened to list recorded that contract at $2.7bn from
+    its ninth amendment rather than its latest.
+    """
+    n = 0
+    for c in rel.get("contracts") or []:
+        for a in c.get("amendments") or []:
+            m = AMEND_NO.search(str(a.get("id") or ""))
+            if m:
+                n = max(n, int(m.group(1)))
+    return (n, rel.get("date") or "")
+
+
+def collapse(rels):
+    """Fold every release of each contracting process into one row.
+
+    The API does not return one release per contract. It returns the original
+    publication and then one release per amendment, each dated when it was
+    published — and it returns all of them together, whichever date axis or
+    endpoint asked. Two mistakes followed from treating each release as a row.
+
+    Keeping the first release seen stored the ORIGINAL value of every amended
+    contract: in a three-week sample from July 2020, 1,324 of 5,406 contracts
+    carried a superseded figure. And letting a later release replace an earlier
+    one overwrote the publication date with the amendment date, moving 367
+    contracts in the live archive into the month, and often the year, they were
+    amended rather than published.
+
+    So the row is assembled from both ends of the history: the publication date
+    and the first value from the earliest release, everything describing the
+    contract as it stands now from the latest.
+    """
+    by = defaultdict(list)
+    for rel in rels:
+        key = rel.get("ocid") or rel.get("id")
+        if key:
+            by[key].append(rel)
+    rows = []
+    for key, group in by.items():
+        # The same release can arrive twice across overlapping windows.
+        uniq = {}
+        for rel in group:
+            uniq[rel.get("id") or json.dumps(rel, sort_keys=True)] = rel
+        ordered = sorted(uniq.values(), key=release_order)
+        first, last = to_row(ordered[0]), to_row(ordered[-1])
+        row = dict(last)
+        row["pub"] = min(p for p in (first.get("pub"), last.get("pub")) if p) \
+            if (first.get("pub") or last.get("pub")) else None
+        row["value_first"] = first.get("value")
+        row["amendments"] = len(ordered) - 1
+        row["amended"] = as_date(ordered[-1].get("date")) if len(ordered) > 1 else None
+        # The dated value of every release, so the contract's value as it stood on
+        # any given day is recoverable. A point-in-time source such as a Senate
+        # Order snapshot can only be fairly compared with the value on its date.
+        row["trail"] = ([[as_date(x.get("date")), to_row(x).get("value")] for x in ordered]
+                        if len(ordered) > 1 else None)
+        rows.append(row)
+    return rows
 
 
 # ---------------------------------------------------------------- flags
@@ -254,8 +373,8 @@ def flag(r):
         except ValueError:
             pass
     v, vf = r.get("value"), r.get("value_first")
-    # Only ever fires on growth this archive observed; pre-archive amendments
-    # are not recoverable from the API.
+    # value_first is the value at original publication, taken from the API's
+    # release history, so this measures growth over the contract's whole life.
     if v and vf and vf > 0 and (v / vf - 1) * 100 > VALUE_GROWTH_PCT:
         f.append("value_growth")
     if v:
@@ -366,21 +485,30 @@ def merge(store, rows, today):
         if old is None:
             r["first_seen"] = today
             r["last_seen"] = today
-            r["value_first"] = r.get("value")
-            r["amendments"] = 0
+            if r.get("value_first") is None:
+                r["value_first"] = r.get("value")
+            r["amendments"] = r.get("amendments") or 0
             store[key] = r
             added += 1
             continue
         # Carry archive-only provenance forward.
         r["first_seen"] = old.get("first_seen") or today
         r["last_seen"] = today
-        r["value_first"] = old.get("value_first", old.get("value"))
-        r["amendments"] = old.get("amendments") or 0
+        # A contract is published once. A later fetch can only ever be looking at
+        # the same publication, so the earlier date stands.
+        if old.get("pub") and (not r.get("pub") or old["pub"] < r["pub"]):
+            r["pub"] = old["pub"]
+        # The API's own release history is the authority on the original value
+        # and the number of amendments; the archive's observation is a fallback.
+        if r.get("value_first") is None:
+            r["value_first"] = old.get("value_first", old.get("value"))
+        r["amendments"] = max(r.get("amendments") or 0, old.get("amendments") or 0)
+        r["amended"] = r.get("amended") or old.get("amended")
+        if len(old.get("trail") or []) > len(r.get("trail") or []):
+            r["trail"] = old["trail"]
         diffs = [f for f in WATCHED
                  if old.get(f) != r.get(f) and old.get(f) not in (None, "")]
         if diffs:
-            if "value" in diffs:
-                r["amendments"] = (old.get("amendments") or 0) + 1
             for f in diffs:
                 changes.append({"ocid": key, "cn": r.get("cn"), "field": f,
                                 "from": old.get(f), "to": r.get(f), "seen": today})
@@ -575,25 +703,6 @@ def read_json(path, default=None):
         return default if default is not None else {}
 
 
-# ---------------------------------------------------------------- embed
-
-SLOT = "<!--PROCLENS_BUNDLE_SLOT-->"
-
-
-def embed(template, bundle, dest):
-    with open(template) as fh:
-        html = fh.read()
-    if SLOT not in html:
-        print(f"{template} has no {SLOT} marker; skipping embed.", file=sys.stderr)
-        return
-    payload = json.dumps(bundle, separators=(",", ":")).replace("</", "<\\/")
-    html = html.replace(SLOT, f"<script>window.__PROCLENS_BUNDLE__={payload};</script>")
-    with open(dest, "w") as fh:
-        fh.write(html)
-    print(f"Wrote {dest}: {os.path.getsize(dest)/1e6:.1f} MB self-contained",
-          file=sys.stderr)
-
-
 # ---------------------------------------------------------------- main
 
 def main():
@@ -607,14 +716,14 @@ def main():
     ap.add_argument("--since-days", type=int,
                     help="top-up the last N days using contractLastModified")
     ap.add_argument("--data-dir", default=DATA_DIR)
+    ap.add_argument("--workers", type=int, default=1,
+                    help="date windows fetched concurrently (deep backfills only)")
     ap.add_argument("--chunk-days", type=int, default=180,
                     help="how much one --resume step fetches before saving")
     ap.add_argument("--axis", choices=["contractPublished", "contractLastModified"],
                     help="override the date axis")
     ap.add_argument("--inspect", action="store_true",
                     help="print field paths present in live responses and exit")
-    ap.add_argument("--embed", metavar="TEMPLATE",
-                    help="also write a self-contained HTML build")
     args = ap.parse_args()
 
     today = date.today()
@@ -673,18 +782,11 @@ def main():
         # costs at most --chunk-days of refetching.
         until = min(target, since + timedelta(days=args.chunk_days))
 
-    rows, seen_ocids = [], set()
-    for rel in releases(since, until, axis=axis):
-        r = to_row(rel)
-        key = r.get("ocid") or r.get("cn")
-        # Within one run the API returns each process once, but guard anyway so
-        # a duplicate cannot inflate the amendment count.
-        if key in seen_ocids:
-            continue
-        seen_ocids.add(key)
-        rows.append(r)
+    fetched = list(releases(since, until, axis=axis, workers=max(1, args.workers)))
+    rows = collapse(fetched)
 
-    print(f"Fetched {len(rows)} releases {since} → {until} on {axis}.", file=sys.stderr)
+    print(f"Fetched {len(fetched)} releases for {len(rows)} contracts "
+          f"{since} → {until} on {axis}.", file=sys.stderr)
     changes, added, updated = merge(store, rows, today_s)
 
     coverage_from = existing.get("coverage", {}).get("from")
@@ -701,16 +803,17 @@ def main():
                      "added": added, "updated": updated},
         "caveats": [
             "Values are committed at award, not amounts actually paid.",
-            "The AusTender API exposes only current state; contract values before "
-            f"{archive_start} are not recoverable, so observed growth begins there.",
+            "Each contract's first value and amendment count come from AusTender's "
+            "own release history; the reason for an amendment is not in the API.",
             "Panel and standing-offer relationships are not published in this feed.",
             "Subcontractors are not published; they require a written request to the agency.",
         ],
     }
     prev_ck = read_json(os.path.join(args.data_dir, "index.json"), {}).get("backfill") or {}
     if target is not None:
+        same_run = prev_ck.get("target") == target.isoformat() and not prev_ck.get("complete")
         meta["backfill"] = {
-            "start": prev_ck.get("start") or since.isoformat(),
+            "start": (prev_ck.get("start") if same_run else None) or since.isoformat(),
             "target": target.isoformat(),
             "next": until.isoformat() if until < target else None,
             "complete": until >= target,
@@ -725,11 +828,6 @@ def main():
           f"${t['value_aud']:,.0f} committed. +{added} new, {updated} updated, "
           f"{len(changes)} field changes this run.", file=sys.stderr)
 
-    if args.embed:
-        bundle = {"index": index, "fields": FIELDS,
-                  "rows": [[r.get(f) for f in FIELDS] for r in store.values()],
-                  "suppliers": build_suppliers(store)[:5000]}
-        embed(args.embed, bundle, "bundle.html")
 
 
 if __name__ == "__main__":

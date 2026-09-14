@@ -1,0 +1,67 @@
+name: Contract notice export
+
+# AusTender publishes a spreadsheet of every contract notice and amendment each
+# Sunday, carrying the fields the OCDS API leaves out: why each amendment was
+# made, confidentiality, consultancy, the approach to market and standing offer.
+# It keeps each file for eighteen months and then deletes it, so a week missed
+# and not caught up within that window is lost. The script captures every file
+# AusTender still lists and skips any it already holds, so one successful run
+# catches up on everything missed before it.
+on:
+  schedule:
+    - cron: "0 6 * * 1"   # Mondays 06:00 UTC, after Sunday's file and refresh
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: archive-write
+  cancel-in-progress: false
+
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      # Any workflow that writes data/ must not run beside another writer, and
+      # must never commit a half-merged file.
+      - name: Refuse to run alongside another archive writer
+        id: guard
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          busy=0
+          for wf in refresh.yml backfill-resume.yml senate.yml so13.yml historical.yml atm.yml export.yml; do
+            [ "$wf" = "export.yml" ] && continue
+            n=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow "$wf" \
+                  --status in_progress --json databaseId --jq 'length' 2>/dev/null || echo 0)
+            busy=$((busy + n))
+          done
+          echo "other archive writers in flight: $busy"
+          [ "$busy" -gt 0 ] && echo "skip=true" >> $GITHUB_OUTPUT || echo "skip=false" >> $GITHUB_OUTPUT
+
+      - uses: actions/checkout@v5
+        if: steps.guard.outputs.skip != 'true'
+      - uses: actions/setup-python@v6
+        if: steps.guard.outputs.skip != 'true'
+        with:
+          python-version: "3.12"
+      - run: pip install requests openpyxl
+        if: steps.guard.outputs.skip != 'true'
+      - run: python export.py --out data/export
+        if: steps.guard.outputs.skip != 'true'
+      - run: python build.py
+        if: steps.guard.outputs.skip != 'true'
+      - name: Commit export and corpus
+        if: steps.guard.outputs.skip != 'true'
+        run: |
+          git config user.name "legal-tender-bot"
+          git config user.email "legal-tender-bot@users.noreply.github.com"
+          git pull --rebase --autostash origin main || { git rebase --abort 2>/dev/null || true; }
+          if grep -rlq '^<<<<<<< ' data 2>/dev/null; then
+            echo 'refusing to commit: conflict markers in data/' >&2; exit 1
+          fi
+          git add data/export data/corpus
+          git diff --staged --quiet || git commit -m "Contract notice export $(date -u +%F)"
+          git push

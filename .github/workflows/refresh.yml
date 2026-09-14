@@ -96,17 +96,23 @@ jobs:
 
           if [ -n "${BACKFILL_FROM:-}" ]; then
             sync
-            python refresh.py --backfill-from "$BACKFILL_FROM" --chunk-days 180
+            python refresh.py --backfill-from "$BACKFILL_FROM" --chunk-days 365 --workers 8
             save "Backfill chunk $(date -u +%F\ %H:%M)"
             for i in $(seq 1 40); do
               more_to_do || break
               sync
-              python refresh.py --resume --chunk-days 180
+              python refresh.py --resume --chunk-days 365 --workers 8
               save "Backfill chunk $(date -u +%F\ %H:%M)"
             done
             echo "backfill loop finished"
+            python build.py
+            save "Corpus rebuilt after backfill $(date -u +%F)"
           else
             sync
-            python refresh.py --since-days 21
+            # Four windows at a time: the API answered 18 concurrent requests
+            # without a single refusal, and this job is the largest single spend
+            # of Actions minutes.
+            python refresh.py --since-days 21 --workers 4
+            python build.py
             save "Archive refresh $(date -u +%F)"
           fi
