@@ -71,19 +71,21 @@ AGENT_RE = re.compile(
     r"\b(a/c|acting as|on behalf of|as agent|as agen|t/a|t/as|trading as|atf|"
     r"as trustee|the trustee for)\b", re.I)
 
-# Platforms, marketplaces and volume resellers. A contract with one of these
-# names the CHANNEL, not the capability bought through it: software acquired via
-# a cloud marketplace or a reseller agreement leaves no notice naming the actual
-# vendor. Flagging them does not imply anything improper — it marks the records
-# where a question about "who really supplied this" cannot be answered from
-# AusTender alone, and where an FOI for drawdowns and order forms is the next step.
+# Licensing resellers and distributors: suppliers whose name tells you the
+# CHANNEL, not whose product was bought. A contract with Data#3 for "software
+# licences" leaves no record of the vendor behind it.
+#
+# The rule used to include the vendors themselves — Palantir, Microsoft, Oracle,
+# SAP, Snowflake, Databricks, AWS — and the big consultancies. That flagged every
+# Palantir contract as a reseller sale, which is backwards: a contract with
+# Palantir is the one kind where the vendor is not in question. Vendors selling
+# their own products, and integrators delivering services, are no longer flagged.
+# Flagging still implies nothing improper; it marks records where "who really
+# supplied this" cannot be answered from the notice alone.
 PLATFORM_RE = re.compile(
-    r"\b(amazon web services|\baws\b|microsoft|azure|google cloud|\bgcp\b|snowflake|"
-    r"databricks|salesforce|servicenow|oracle|\bsap\b|vmware|palantir|"
-    r"data ?#? ?3|datacom|dxc|kyndryl|insight enterprises|softwareone|softwareone|"
-    r"crayon|rhipe|dicker data|ingram micro|synnex|cdw|shi |sos recruitment|"
-    r"telstra purple|kinetic it|atturra|versent|deloitte|accenture|kpmg|"
-    r"pricewaterhousecoopers|\bpwc\b|ernst & young|\bey\b|mckinsey|boston consulting)\b",
+    r"\b(data ?#? ?3|dicker data|crayon|softwareone|software one|insight enterprises|"
+    r"rhipe|ingram micro|td synnex|synnex|westcon|arrow ecs|exclusive networks|"
+    r"marketplace)\b",
     re.I)
 
 

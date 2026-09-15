@@ -6,145 +6,132 @@
 <title>Legal Tender — Australian government contracts</title>
 <meta name="description" content="A growing archive of Australian Commonwealth contract notices. Search and filter by date, amount, agency and supplier.">
 <meta name="color-scheme" content="light dark">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;800;900&family=Work+Sans:wght@400;500;600;700&family=Courier+Prime:wght@400;700&display=swap">
+<meta name="theme-color" content="#ecebe7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#141938" media="(prefers-color-scheme: dark)">
 <style>
+/* ======================================================================
+   RISO. Legal Tender is set like a transparency zine run off a risograph:
+   two inks, federal blue and fluorescent pink, printed on grey stock. Where
+   they overlap they overprint; the display type sits slightly off register;
+   halftone and paper grain are left in rather than polished out.
+
+   Contrast, checked: blue ink on paper 8.62:1; muted 5.49:1; paper on blue
+   8.62:1; blue on pink tint 7.61:1. Fluorescent pink on paper is only 2.71:1,
+   so it is never used for text below display size — small pink text uses the
+   darker rhodamine (5.43:1). Blue on solid fluorescent pink is 3.18:1, so a
+   solid pink block carries only large type. Night print: cream on navy
+   14.9:1, pink on navy 6.15:1.
+   ====================================================================== */
 :root{
-  /* Deep teal ink on warm paper. Contrast checked: ink/paper 15.8:1,
-     muted/paper 5.4:1, accent/paper 6.9:1, accent-ink/accent 9.2:1 — all AA. */
-  --paper:#eef1f4; --paper-2:#e4e9ee; --card:#fff; --ink:#0f1720; --muted:#53616f;
-  --line:#dfe5ea; --line-ui:#9aa6b2;
-  --accent:#0d5c63; --accent-2:#12868f; --accent-ink:#fff; --accent-soft:#e0f0f1;
-  --amber-ink:#7a5b12; --amber-bg:#f6eeda;
-  --band:#f3f6f8;
-  --shadow:0 1px 2px rgba(15,23,32,.05),0 8px 24px -8px rgba(15,23,32,.14);
-  --shadow-lg:0 2px 4px rgba(15,23,32,.06),0 24px 48px -16px rgba(15,23,32,.22);
-  --glass:rgba(255,255,255,.72); --glass-line:rgba(255,255,255,.6);
-  --r:12px; --rs:8px;
-  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
-  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,system-ui,sans-serif;
+  --paper:#ecebe7; --card:#f6f5f2; --band:#e4e3de;
+  --ink:#233b86; --muted:#4f5b8c; --line:#cfd2df; --line-ui:#233b86;
+  --pink:#ff3fa4;           /* fluorescent ink: fills, rules, offsets, display type */
+  --pink-ink:#b3136f;       /* rhodamine: pink where it has to be read small */
+  --tint:#ffd1e8;           /* pink at a light screen: highlights and chips */
+  --over:#6b2a8f;           /* blue overprinting pink */
+  --on-ink:#ecebe7;
+  --dot:rgba(255,63,164,.22); --grain-op:.16; --grain-blend:multiply;
+  --r:2px;
+  --disp:"Big Shoulders Display",Impact,"Arial Narrow",sans-serif;
+  --sans:"Work Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"Courier Prime","Courier New",ui-monospace,monospace;
 }
 @media(prefers-color-scheme:dark){:root:not([data-theme="light"]){
-  --paper:#0b0f13; --paper-2:#0f151b; --card:#141b22; --ink:#e6ecf2; --muted:#93a3b2;
-  --line:#1f2a33; --line-ui:#54646f;
-  --accent:#4fd1c5; --accent-2:#2bb3ae; --accent-ink:#08131a; --accent-soft:#0f2c2e;
-  --amber-ink:#e6c66d; --amber-bg:#2a2413;
-  --band:#111820;
-  --shadow:0 1px 2px rgba(0,0,0,.5),0 10px 30px -10px rgba(0,0,0,.6);
-  --shadow-lg:0 2px 6px rgba(0,0,0,.5),0 28px 56px -20px rgba(0,0,0,.75);
-  --glass:rgba(20,27,34,.7); --glass-line:rgba(255,255,255,.07);
+  --paper:#141938; --card:#1b2150; --band:#181d45;
+  --ink:#f1efe9; --muted:#b3b8dc; --line:#2e3570; --line-ui:#f1efe9;
+  --pink:#ff5fb3; --pink-ink:#ff7cc2; --tint:#3a1d4a; --over:#c9a6ff; --on-ink:#141938;
+  --dot:rgba(255,95,179,.13); --grain-op:.07; --grain-blend:screen;
 }}
 :root[data-theme="dark"]{
-  --paper:#0b0f13; --paper-2:#0f151b; --card:#141b22; --ink:#e6ecf2; --muted:#93a3b2;
-  --line:#1f2a33; --line-ui:#54646f;
-  --accent:#4fd1c5; --accent-2:#2bb3ae; --accent-ink:#08131a; --accent-soft:#0f2c2e;
-  --amber-ink:#e6c66d; --amber-bg:#2a2413;
-  --band:#111820;
-  --shadow:0 1px 2px rgba(0,0,0,.5),0 10px 30px -10px rgba(0,0,0,.6);
-  --shadow-lg:0 2px 6px rgba(0,0,0,.5),0 28px 56px -20px rgba(0,0,0,.75);
-  --glass:rgba(20,27,34,.7); --glass-line:rgba(255,255,255,.07);
+  --paper:#141938; --card:#1b2150; --band:#181d45;
+  --ink:#f1efe9; --muted:#b3b8dc; --line:#2e3570; --line-ui:#f1efe9;
+  --pink:#ff5fb3; --pink-ink:#ff7cc2; --tint:#3a1d4a; --over:#c9a6ff; --on-ink:#141938;
+  --dot:rgba(255,95,179,.13); --grain-op:.07; --grain-blend:screen;
 }
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
 body{margin:0;color:var(--ink);font:15px/1.5 var(--sans);-webkit-font-smoothing:antialiased;
-  background:
-    radial-gradient(1100px 520px at 12% -8%, color-mix(in srgb, var(--accent) 13%, transparent), transparent 60%),
-    radial-gradient(900px 460px at 92% 0%, color-mix(in srgb, var(--accent-2) 10%, transparent), transparent 62%),
-    linear-gradient(180deg, var(--paper) 0%, var(--paper-2) 100%);
-  background-attachment:fixed}
+  background:radial-gradient(circle at 1px 1px,var(--dot) 1px,transparent 1.6px) 0 0/7px 7px,var(--paper)}
+/* Paper grain. Fixed, above the page, never catching a pointer. */
+body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:60;
+  opacity:var(--grain-op);mix-blend-mode:var(--grain-blend);
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .12 0 0 0 0 .14 0 0 0 0 .3 0 0 0 .6 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>")}
+::selection{background:var(--tint);color:var(--ink)}
 .wrap{max-width:1280px;margin:0 auto;padding:0 16px}
-a{color:var(--accent)}
-:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+/* .linkbtn is a <button> that must read as a link, so it sheds every button rule
+   first. Without the reset it inherited the boxed control style below, which
+   turned each contract title into a button that could not wrap on a phone. */
+.linkbtn{all:unset;cursor:pointer;font:inherit;overflow-wrap:anywhere}
+a,.linkbtn{color:var(--ink);text-decoration:underline;text-decoration-color:var(--pink);
+  text-decoration-thickness:2px;text-underline-offset:3px}
+a:hover,.linkbtn:hover{background:var(--tint)}
+:focus-visible{outline:3px solid var(--pink);outline-offset:2px}
 .skip{position:absolute;left:-9999px;top:0}
-.skip:focus{left:8px;top:8px;background:var(--card);padding:10px 14px;z-index:200;
-  border:1px solid var(--line-ui);border-radius:var(--rs)}
+.skip:focus{left:8px;top:8px;background:var(--card);padding:10px 14px;z-index:200;border:2px solid var(--ink)}
 .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 button,select,input{font-family:var(--sans);color:var(--ink)}
 
-/* ---------- app bar (sticky): header + toolbar travel together ---------- */
-.appbar{position:sticky;top:0;z-index:40;
-  background:color-mix(in srgb, var(--paper) 72%, transparent);
-  backdrop-filter:saturate(1.6) blur(14px);-webkit-backdrop-filter:saturate(1.6) blur(14px);
-  border-bottom:1px solid var(--line)}
-@supports not (backdrop-filter:blur(2px)){.appbar{background:var(--paper)}}
-header{background:transparent}
-.head{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center;padding:12px 0}
-h1{font-size:22px;margin:0;letter-spacing:-.025em;font-weight:750;
-  background:linear-gradient(100deg,var(--ink),color-mix(in srgb,var(--accent) 78%,var(--ink)));
-  -webkit-background-clip:text;background-clip:text;color:transparent}
-h1 .co{-webkit-text-fill-color:var(--accent-2);color:var(--accent-2)}
-.tag{color:var(--muted);font-size:13px;margin:0}
+/* ---------- app bar: header and search travel together ---------- */
+.appbar{position:sticky;top:0;z-index:40;background:var(--paper);border-bottom:3px solid var(--ink)}
+.head{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center;padding-block:12px}
+h1{margin:0;font:900 36px/.9 var(--disp);text-transform:uppercase;letter-spacing:.005em;color:var(--ink);
+  text-shadow:2px 1.5px 0 var(--pink)}
+h1 .co{color:var(--pink)}
+.tag{margin:0;color:var(--ink);font:700 13px var(--mono)}
 .sp{flex:1}
-.tabs{display:flex;gap:4px;background:var(--band);padding:3px;border-radius:var(--r)}
-.tab{font:600 13px var(--sans);padding:8px 14px;min-height:38px;border:0;background:transparent;
-  color:var(--muted);cursor:pointer;border-radius:var(--rs)}
-.tab[aria-selected=true]{background:var(--card);color:var(--accent);box-shadow:var(--shadow)}
+.tabs{display:flex;gap:6px}
+.tab{font:800 16px/1 var(--disp);letter-spacing:.04em;text-transform:uppercase;padding:9px 12px;min-height:38px;
+  border:2px solid var(--ink);border-radius:var(--r);background:transparent;color:var(--ink);cursor:pointer}
+.tab:hover{background:var(--tint)}
+.tab[aria-selected=true]{background:var(--ink);color:var(--on-ink);box-shadow:3px 3px 0 var(--pink)}
 .ts{display:none}
-.dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--accent);
-  margin-left:5px;vertical-align:2px}
-.n-open{color:#0a7d4f;font-weight:600}
-@media(prefers-color-scheme:dark){:root:not([data-theme="light"]) .n-open{color:#4ade9a}}
-.n-closed{color:var(--muted)}
-.n-soon{color:#b4521a;font-weight:600}
-@media(prefers-color-scheme:dark){:root:not([data-theme="light"]) .n-soon{color:#ffa76a}}
-.alertbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 14px}
-/* On a phone these chips wrapped to five rows, putting the table below the fold
-   before anyone had asked for anything. One swipeable row instead. */
-@media(max-width:759px){
-  .alertbar{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;
-    -webkit-overflow-scrolling:touch;padding-bottom:4px}
-  .alertbar::-webkit-scrollbar{display:none}
-  .alertbar>*{flex:0 0 auto}
-  .alertbar .feedlink{display:none}
-}
-.alertbar .flag{cursor:pointer}
-/* Value, agency, sort and the review flags all describe awarded contracts.
-   Leaving them on screen over a list of notices invites a filter that silently
-   does nothing, so the notices tab shows only the controls that apply to it. */
-body.notices #grp-value,body.notices #agency,body.notices #sort,body.notices #chips{display:none}
-.iconbtn{display:inline-flex;align-items:center;gap:6px;font:600 13px var(--sans);
-  padding:8px 12px;min-height:38px;border:1px solid var(--line-ui);border-radius:var(--rs);
-  background:var(--card);color:var(--ink);cursor:pointer}
-.iconbtn:hover{border-color:var(--accent);color:var(--accent)}
+.dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--pink);margin-left:5px;vertical-align:2px}
+.iconbtn{display:inline-flex;align-items:center;gap:6px;font:700 13px var(--mono);padding:8px 12px;min-height:38px;
+  border:2px solid var(--ink);border-radius:var(--r);background:transparent;color:var(--ink);cursor:pointer}
+.iconbtn:hover{background:var(--tint)}
 
-.tools{background:transparent;padding:12px 0 18px}
+.tools{padding:14px 0 18px}
 .searchrow{display:flex;gap:10px;align-items:stretch;margin-bottom:6px}
-#q{flex:1;min-width:0;font:16px var(--sans);padding:13px 15px;
-  border:1px solid var(--line-ui);border-radius:var(--r);
-  background:var(--glass);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
-  color:var(--ink);box-shadow:var(--shadow);transition:border-color .15s,box-shadow .15s}
-#q:focus{border-color:var(--accent);
-  box-shadow:0 0 0 4px color-mix(in srgb,var(--accent) 16%,transparent),var(--shadow)}
-#q::placeholder{color:var(--muted)}
+#q{flex:1;min-width:0;font:600 19px var(--sans);padding:12px 15px;border:3px solid var(--ink);border-radius:var(--r);
+  background:var(--card);color:var(--ink);box-shadow:5px 5px 0 var(--pink);transition:box-shadow .12s}
+#q:focus{outline:none;box-shadow:5px 5px 0 var(--ink)}
+#q::placeholder{color:var(--muted);font-weight:500}
 select,button,input[type=date],input[type=number]{font:14px var(--sans);padding:9px 10px;
-  border:1px solid var(--line-ui);border-radius:var(--rs);background:var(--card);color:var(--ink)}
+  border:2px solid var(--ink);border-radius:var(--r);background:var(--card);color:var(--ink)}
 button,select{cursor:pointer}
-button:hover,select:hover{border-color:var(--accent)}
-.btn-p{background:linear-gradient(180deg,var(--accent-2),var(--accent));
-  color:var(--accent-ink);border-color:transparent;font-weight:700;box-shadow:var(--shadow)}
-.btn-p:hover{filter:brightness(1.06)}
-.grp{display:flex;gap:8px;align-items:center;flex-wrap:wrap;
-  border:1px solid var(--line-ui);border-radius:var(--r);padding:9px 12px;
-  background:var(--glass);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
-  box-shadow:var(--shadow)}
-.grp label{font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;font-weight:600}
+button:hover,select:hover{background:var(--tint)}
+.btn-p{background:var(--ink);color:var(--on-ink);border-color:var(--ink);font-weight:700;box-shadow:3px 3px 0 var(--pink)}
+.btn-p:hover{background:var(--ink);box-shadow:5px 5px 0 var(--pink)}
+.grp{display:flex;gap:8px;align-items:center;flex-wrap:wrap;border:2px solid var(--ink);border-radius:var(--r);
+  padding:8px 12px;background:var(--card)}
+.grp label{font:700 11px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink)}
 .grp input[type=date]{border:none;padding:3px;background:transparent;min-width:118px;color:var(--ink)}
-.grp input[type=number]{border:none;padding:3px;background:transparent;width:96px;
-  font-family:var(--mono);text-align:right;color:var(--ink)}
+.grp input[type=number]{border:none;padding:3px;background:transparent;width:96px;font-family:var(--mono);text-align:right;color:var(--ink)}
 .chiprow{display:flex;gap:7px;flex-wrap:wrap}
-.chip{font:600 12.5px var(--sans);padding:7px 12px;border-radius:20px;
-  border:1px solid var(--line-ui);background:var(--card);color:var(--muted);cursor:pointer}
-.chip[aria-pressed=true]{background:var(--accent-soft);border-color:var(--accent);
-  color:var(--accent)}
-.count{color:var(--muted);font-size:13px;padding:9px 0 0}
-.count b{color:var(--ink);font-variant-numeric:tabular-nums}
+.chip{font:700 12px var(--mono);padding:6px 10px;border-radius:var(--r);border:2px solid var(--ink);
+  background:transparent;color:var(--ink);cursor:pointer}
+.chip[aria-pressed=true],.chip.on{background:var(--ink);color:var(--on-ink);box-shadow:2px 2px 0 var(--pink)}
+.count{color:var(--ink);font-size:14px;padding:9px 0 0}
+/* Totals are the figures a reader came for, so they are marked like a highlighter pass. */
+.count b{font:800 21px/1 var(--disp);letter-spacing:.02em;font-variant-numeric:tabular-nums;
+  background:linear-gradient(transparent 58%,var(--tint) 58%)}
+.count .t-sub{color:var(--muted)}
 #filterBtn{position:relative}
-.badge{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;
-  padding:0 5px;border-radius:9px;background:var(--accent);color:var(--accent-ink);
-  font:700 11px var(--mono);line-height:18px}
+.badge{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 5px;
+  border-radius:9px;background:var(--pink);color:#233b86;font:700 11px var(--mono);line-height:18px}
+progress{width:100%;height:6px;appearance:none;border:1.5px solid var(--ink);background:transparent;accent-color:var(--pink)}
+progress::-webkit-progress-bar{background:transparent}
+progress::-webkit-progress-value{background:var(--pink)}
+progress::-moz-progress-bar{background:var(--pink)}
+progress[hidden]{display:none}
 
 /* ---------- filter sheet: a <dialog>, forced inline on wide screens ---------- */
-dialog#filterSheet{border:1px solid var(--line-ui);border-radius:var(--r);padding:0;
-  background:var(--card);color:var(--ink);max-width:none;width:100%;margin:14px auto 0}
-dialog#filterSheet::backdrop{background:rgba(10,12,16,.5)}
+dialog#filterSheet{border:2px solid var(--ink);border-radius:var(--r);padding:0;background:var(--card);color:var(--ink);
+  max-width:none;width:100%;margin:14px auto 0}
+dialog#filterSheet::backdrop{background:rgba(20,25,56,.55)}
 .fsheet-head{display:none}
 .fsheet-body{display:flex;flex-direction:column;gap:12px;padding:14px}
 .fsheet-foot{display:none}
@@ -152,23 +139,20 @@ dialog#filterSheet::backdrop{background:rgba(10,12,16,.5)}
   dialog#filterSheet{position:fixed;inset:auto 0 0 0;width:100%;max-width:none;margin:0;
     /* dvh, not vh: mobile browser chrome makes vh taller than the visible area,
        which pushes a bottom-anchored sheet off the screen. */
-    max-height:85vh;max-height:85dvh;
-    border-radius:16px 16px 0 0;border-width:1px 0 0 0}
+    max-height:85vh;max-height:85dvh;border-width:3px 0 0 0;box-shadow:0 -6px 0 var(--pink)}
   /* Entrance fade only. A translateY animation here left the sheet stranded
      81px below the viewport with the Apply button unreachable whenever the
      animation did not run to completion — never move the resting position. */
   dialog#filterSheet[open]{display:flex;flex-direction:column;animation:sheetin .18s ease-out}
   @keyframes sheetin{from{opacity:0}to{opacity:1}}
   @media(prefers-reduced-motion:reduce){dialog#filterSheet[open]{animation:none}}
-  .fsheet-head{display:flex;align-items:center;justify-content:space-between;
-    padding:14px 16px;border-bottom:1px solid var(--line);flex:none}
-  .fsheet-head strong{font-size:16px}
+  .fsheet-head{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;
+    border-bottom:2px solid var(--ink);flex:none}
+  .fsheet-head strong{font:900 26px/1 var(--disp);text-transform:uppercase}
   /* min-height:0 is required or a flex child refuses to shrink below its
      content, so the body never scrolls and the footer is pushed out. */
-  .fsheet-body{overflow-y:auto;overscroll-behavior:contain;
-    -webkit-overflow-scrolling:touch;flex:1 1 auto;min-height:0}
-  .fsheet-foot{display:flex;gap:10px;padding:12px 16px;border-top:1px solid var(--line);
-    flex:none;background:var(--card);
+  .fsheet-body{overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;flex:1 1 auto;min-height:0}
+  .fsheet-foot{display:flex;gap:10px;padding:12px 16px;border-top:2px solid var(--ink);flex:none;background:var(--card);
     padding-bottom:calc(12px + env(safe-area-inset-bottom,0px))}
   .fsheet-foot .btn-p{flex:1;min-height:46px;font-size:14.5px}
   .fsheet-foot #reset{min-height:46px}
@@ -179,133 +163,145 @@ dialog#filterSheet::backdrop{background:rgba(10,12,16,.5)}
 }
 @media(min-width:900px){
   #filterBtn{display:none}
-  dialog#filterSheet{display:block!important;position:static;width:auto;margin:0;padding:0;
-    border:0;background:transparent;box-shadow:none;max-height:none}
+  dialog#filterSheet{display:block!important;position:static;width:auto;margin:0;padding:0;border:0;
+    background:transparent;box-shadow:none;max-height:none}
   .fsheet-body{flex-direction:row;flex-wrap:wrap;align-items:center;padding:0}
 }
-.closex{all:unset;cursor:pointer;width:32px;height:32px;display:flex;align-items:center;
-  justify-content:center;border-radius:50%;color:var(--muted)}
-.closex:hover{background:var(--band);color:var(--ink)}
+.closex{all:unset;cursor:pointer;width:34px;height:34px;display:flex;align-items:center;justify-content:center;
+  border:2px solid var(--ink);color:var(--ink);font-weight:700}
+.closex:hover{background:var(--tint)}
 
-.note{border-left:3px solid var(--accent);background:var(--accent-soft);
-  padding:11px 14px;margin:14px 0;font-size:13.5px;border-radius:0 var(--rs) var(--rs) 0}
-.note.warn{border-color:var(--amber-ink);background:var(--amber-bg)}
-.note b{color:var(--accent)} .note.warn b{color:var(--amber-ink)}
+.note{border:2px dashed var(--ink);background:transparent;padding:11px 14px;margin:14px 0;font-size:13.5px}
+.note b{color:var(--ink);background:var(--tint)}
+
+/* ---------- landing ---------- */
+/* Before anyone has asked anything, only the search field and the date range
+   are useful. The rest appears with the results. */
+body.landing #grp-value,body.landing #agency,body.landing #sort,body.landing #chips,body.landing #csv{display:none}
+.hero{margin:7vh 0 11vh;max-width:1000px}
+.hero h2{margin:0 0 20px;font:900 clamp(56px,9vw,132px)/.86 var(--disp);text-transform:uppercase;letter-spacing:.005em;
+  color:var(--ink);max-width:11ch;text-wrap:balance;text-shadow:4px 3px 0 var(--pink)}
+.herosub{margin:0 0 24px;font:700 18px/1.45 var(--mono);color:var(--ink);max-width:44ch;transform:rotate(-.6deg)}
+.herohint{display:inline-block;margin:0;padding:9px 15px;font:700 19px var(--mono);color:#233b86;background:var(--pink);
+  transform:rotate(1.2deg);box-shadow:3px 3px 0 var(--ink)}
+@media(prefers-reduced-motion:reduce){.herosub,.herohint{transform:none}}
 
 /* ---------- results: real table ≥760px, stacked cards below ---------- */
 table{width:100%;border-collapse:collapse;font-size:14px}
-.tw{background:var(--glass);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
-  border:1px solid var(--glass-line);border-radius:var(--r);box-shadow:var(--shadow);overflow:hidden}
-@supports not (backdrop-filter:blur(2px)){.tw{background:var(--card)}}
+.tw{border:3px solid var(--ink);border-radius:var(--r);background:var(--card);box-shadow:8px 8px 0 var(--pink)}
 caption{text-align:left}
-th{text-align:left;font-size:11.5px;text-transform:uppercase;letter-spacing:.06em;
-  color:var(--muted);padding:10px;border-bottom:1px solid var(--line);
-  background:var(--card);white-space:nowrap}
-th[aria-sort] button::after{content:"";margin-left:3px}
-th[aria-sort=ascending] button::after{content:"▲";font-size:9px}
-th[aria-sort=descending] button::after{content:"▼";font-size:9px}
+th{text-align:left;padding:10px;background:var(--ink);color:var(--on-ink);white-space:nowrap;
+  font:800 15px/1 var(--disp);letter-spacing:.06em;text-transform:uppercase;border:0}
+th[aria-sort] button::after{content:"";margin-left:4px}
+th[aria-sort=ascending] button::after{content:"▲";font-size:9px;color:var(--pink)}
+th[aria-sort=descending] button::after{content:"▼";font-size:9px;color:var(--pink)}
 th button{all:unset;cursor:pointer;font:inherit;color:inherit;min-height:24px;display:inline-flex;align-items:center}
-th button:hover{color:var(--accent)}
-td{padding:10px;vertical-align:top}
+th button:hover{color:var(--pink)}
+td{padding:11px 10px;vertical-align:top}
 .num{text-align:right;font-variant-numeric:tabular-nums;font-family:var(--mono);white-space:nowrap}
-.t-title{font-weight:650;max-width:340px}
-.t-sub{color:var(--muted);font-size:12px;font-family:var(--mono);margin-top:1px}
+.t-title{font:600 15px/1.3 var(--sans);max-width:340px}
+.t-title .linkbtn{color:var(--ink)}
+/* CN ids and other reference numbers: set as typewriter serials in rhodamine. */
+.t-sub{color:var(--pink-ink);font:700 11.5px var(--mono);margin-top:2px}
 .t-party{max-width:200px;font-size:13.5px}
-.rule{height:5px;background:var(--band);border-radius:3px;margin-top:6px;position:relative;min-width:70px}
-.rule i{position:absolute;inset:0 auto 0 0;background:var(--accent);border-radius:3px}
-.rule u{position:absolute;top:-2.5px;width:2px;height:10px;background:var(--ink);
-  box-shadow:0 0 0 1px var(--card)}
-.flag{display:inline-block;font-size:11px;font-family:var(--mono);padding:3px 8px;
-  border-radius:5px;background:var(--amber-bg);color:var(--amber-ink);margin:2px 3px 0 0;white-space:nowrap}
-.alias{font-size:12px;color:var(--muted);font-style:italic;margin-top:3px}
-.linkbtn{all:unset;cursor:pointer;color:var(--accent);text-decoration:underline;
-  text-underline-offset:2px;font:inherit}
-progress{width:100%;height:4px;accent-color:var(--accent)}
-progress[hidden]{display:none}
+.t-value{font:800 21px/1.05 var(--disp);letter-spacing:.02em;color:var(--ink)}
+/* The value rule overprints: pink laid down, blue outline on top. */
+.rule{height:8px;border:1.5px solid var(--ink);margin-top:7px;position:relative;min-width:70px}
+.rule i{position:absolute;inset:0 auto 0 0;background:var(--pink)}
+.rule u{position:absolute;top:-4px;width:3px;height:13px;background:var(--ink)}
+.flag{display:inline-block;font:700 11px var(--mono);padding:2px 6px;background:var(--tint);color:var(--ink);
+  border:1.5px solid var(--ink);margin:2px 3px 0 0;white-space:nowrap}
+.alias{font:italic 12px var(--mono);color:var(--muted);margin-top:3px}
+.empty{padding:48px 16px;text-align:center;color:var(--ink);font:700 15px var(--mono)}
 
 @media(max-width:759px){
+  .tw{border:0;background:transparent;box-shadow:none}
   .tw table,.tw thead,.tw tbody,.tw tr,.tw td{display:block;width:100%}
   .tw thead{position:absolute;left:-9999px}
-  .tw tbody{display:flex;flex-direction:column;gap:10px}
-  .tw tr{border:1px solid var(--line);border-radius:var(--r);padding:13px 14px;
-    background:var(--card);box-shadow:var(--shadow);cursor:default}
+  .tw tbody{display:flex;flex-direction:column;gap:14px}
+  .tw tr{border:2px solid var(--ink);padding:13px 14px;background:var(--card);box-shadow:5px 5px 0 var(--pink)}
   .tw td{padding:0;border:0}
   .tw td:empty{display:none}
   .tw td+td{margin-top:8px}
-  .tw td[data-th]::before{content:attr(data-th);display:block;font-size:10.5px;
-    text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:700;margin-bottom:2px}
-  .t-title{max-width:none;font-size:15.5px;order:-3}
-  .t-title .t-sub{font-size:11.5px}
-  td.t-value{order:-2;text-align:left;font-size:17px;font-weight:750}
+  .tw td[data-th]::before{content:attr(data-th);display:block;font:700 10.5px var(--mono);
+    text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:2px}
+  .t-title{max-width:none;font-size:16px;order:-3}
+  td.t-value{order:-2;text-align:left;font-size:26px}
   td.t-value .rule{max-width:220px}
   td[data-th=Flags]{order:1}
   td[data-th=Flags]:not(:empty)::before{margin-bottom:5px}
   td[data-th=Agency],td[data-th=Supplier]{font-size:13.5px}
-  td[data-th=Published],td[data-th=Start],td[data-th=End]{display:inline-block;width:auto;
-    text-align:left;margin:8px 14px 0 0;font-size:12.5px}
-  td[data-th=Published]::before,td[data-th=Start]::before,td[data-th=End]::before{
-    display:inline;margin-bottom:0;margin-right:4px}
-  .num{font-family:var(--mono)}
+  td[data-th=Published],td[data-th=Start],td[data-th=End]{display:inline-block;width:auto;text-align:left;margin:8px 14px 0 0;font-size:12.5px}
+  td[data-th=Published]::before,td[data-th=Start]::before,td[data-th=End]::before{display:inline;margin-bottom:0;margin-right:4px}
 }
 @media(min-width:760px){
-  .tw{overflow-x:auto;border:1px solid var(--line);border-radius:var(--r)}
-  tbody tr:nth-child(even){background:var(--band)}
-  tbody tr:hover{background:var(--accent-soft)}
-  td{border-bottom:1px solid var(--line)}
+  .tw{overflow-x:auto}
+  td{border-bottom:1.5px dashed var(--line)}
+  tbody tr:hover{background:var(--tint)}
   th.hide-m,td.hide-m{display:none}
 }
-@media(min-width:1000px){
-  th.hide-m,td.hide-m{display:table-cell}
-}
+@media(min-width:1000px){ th.hide-m,td.hide-m{display:table-cell} }
 
-dialog#dlg,dialog#aboutDlg{border:1px solid var(--glass-line);border-radius:16px;padding:0;
-  max-width:660px;width:92vw;background:var(--card);color:var(--ink);box-shadow:var(--shadow-lg)}
-dialog#dlg::backdrop,dialog#aboutDlg::backdrop{background:rgba(6,12,16,.55);backdrop-filter:blur(3px)}
+/* ---------- open tenders ---------- */
+.alertbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 14px}
+/* On a phone these chips wrapped to five rows, putting the table below the fold
+   before anyone had asked for anything. One swipeable row instead. */
 @media(max-width:759px){
-  dialog#dlg{position:fixed;inset:auto 0 0 0;width:100%;max-width:none;max-height:88vh;
-    border-radius:16px 16px 0 0;border-width:1px 0 0 0}
+  .alertbar{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;padding:0 6px 6px 0}
+  .alertbar::-webkit-scrollbar{display:none}
+  .alertbar>*{flex:0 0 auto}
+  .alertbar .feedlink{display:none}
 }
-.dh{display:flex;justify-content:space-between;gap:12px;align-items:start;
-  padding:16px;border-bottom:1px solid var(--line)}
-.dh strong{font-size:16px}
-.db{padding:16px;max-height:64vh;overflow:auto}
-.kv{display:grid;grid-template-columns:150px 1fr;gap:9px 14px;font-size:14px;margin:0}
-.kv dt{color:var(--muted)} .kv dd{margin:0;word-break:break-word}
-@media(max-width:480px){.kv{grid-template-columns:1fr}.kv dt{font-size:11.5px;text-transform:uppercase;
-  letter-spacing:.05em;font-weight:700;margin-top:6px}}
+.alertbar .flag{cursor:pointer}
+/* Value, agency, sort and the review flags describe awarded contracts, so the
+   notices tab shows only the controls that apply to it. */
+body.notices #grp-value,body.notices #agency,body.notices #sort,body.notices #chips{display:none}
+.n-open{color:var(--ink);font-weight:700}
+.n-soon{color:var(--ink);font-weight:700;background:var(--tint);padding:1px 5px;border:1.5px solid var(--pink-ink)}
+.n-closed{color:var(--muted);text-decoration:line-through;text-decoration-color:var(--pink)}
 
-/* Before anyone has asked anything, only the search field and the date range
-   are useful. The rest appears with the results. */
-body.landing #grp-value,body.landing #agency,body.landing #sort,
-body.landing #chips,body.landing #csv{display:none}
-.hero{max-width:640px;margin:9vh auto 12vh;text-align:center}
-.hero h2{font-size:clamp(24px,4vw,34px);line-height:1.2;margin:0 0 12px;letter-spacing:-.03em;
-  background:linear-gradient(100deg,var(--ink),color-mix(in srgb,var(--accent) 72%,var(--ink)));
-  -webkit-background-clip:text;background-clip:text;color:transparent}
-.herosub{color:var(--muted);font-size:16px;margin:0 0 22px}
-.herohint{display:inline-block;color:var(--accent);font-size:13.5px;font-weight:600;
-  padding:9px 16px;border-radius:999px;background:var(--accent-soft);
-  border:1px solid color-mix(in srgb,var(--accent) 24%,transparent)}
-footer{border-top:1px solid var(--line);margin-top:32px;padding:20px 0 44px;color:var(--muted);font-size:13px}
-.empty{padding:48px 16px;text-align:center;color:var(--muted)}
+/* ---------- dialogs ---------- */
+dialog#dlg,dialog#aboutDlg{border:3px solid var(--ink);border-radius:var(--r);padding:0;max-width:680px;width:92vw;
+  background:var(--card);color:var(--ink);box-shadow:10px 10px 0 var(--pink)}
+dialog#dlg::backdrop,dialog#aboutDlg::backdrop{background:rgba(20,25,56,.6)}
+@media(max-width:759px){
+  dialog#dlg{position:fixed;inset:auto 0 0 0;width:100%;max-width:none;max-height:88vh;border-width:3px 0 0 0;box-shadow:0 -6px 0 var(--pink)}
+}
+.dh{display:flex;justify-content:space-between;gap:12px;align-items:start;padding:16px;border-bottom:3px solid var(--ink)}
+.dh strong{font:900 28px/.95 var(--disp);text-transform:uppercase;letter-spacing:.01em;text-wrap:balance}
+.db{padding:16px;max-height:64vh;overflow:auto}
+.kv{display:grid;grid-template-columns:170px minmax(0,1fr);gap:9px 14px;font-size:14px;margin:0}
+.kv dt{font:700 12px var(--mono);color:var(--muted);text-transform:uppercase;letter-spacing:.03em;padding-top:2px}
+.kv dd{margin:0;min-width:0;overflow-wrap:anywhere}
+@media(max-width:480px){.kv{grid-template-columns:minmax(0,1fr)}.kv dt{margin-top:6px}}
+
+footer{border-top:3px solid var(--ink);margin-top:32px;padding:20px 0 44px;color:var(--ink);font:13px/1.55 var(--mono)}
+footer strong{font:900 17px var(--disp);text-transform:uppercase;letter-spacing:.02em}
+
 @media(max-width:759px){
   .hide-s{display:none}
   .sp{flex-basis:100%;height:0}
-  /* The title takes its own line, so tabs and actions must share the next one.
-     Four full-width labels wrapped onto a third; the actions become icons with
-     an accessible name, and the tabs tighten. */
-  .head{gap:8px;padding:10px 0}
-  h1{font-size:19px}
-  .tabs{gap:2px;padding:2px}
-  /* Three tabs and two actions have to share one line on a 375px screen, so the
-     third tab drops to a shorter word rather than pushing the row onto two. */
-  .tab{padding:8px 10px;font-size:12px}
+  /* The title takes its own line, so tabs and actions must share the next one. */
+  /* padding-block, not padding: the shorthand zeroed the page gutter and put the
+     wordmark flush against the screen edge. */
+  .head{gap:8px;padding-block:10px}
+  h1{font-size:28px}
+  .tabs{gap:4px}
+  /* Three tabs and two actions share one line on a 375px screen, so the third
+     tab drops to a shorter word rather than pushing the row onto two. Measured:
+     at these sizes the row ends inside the 16px gutter. */
+  .tab{padding:8px 7px;font-size:14.5px;border-width:2px}
+  .tab[aria-selected=true]{box-shadow:2px 2px 0 var(--pink)}
   .tl{display:none}.ts{display:inline}
-  .iconbtn{padding:8px 11px;min-width:40px;justify-content:center}
+  .iconbtn{padding:8px 0;min-width:40px;justify-content:center}
   .iconbtn .lbl{display:none}
   .iconbtn .ico{font-size:15px;line-height:1}
+  #q{font-size:17px;box-shadow:4px 4px 0 var(--pink)}
+  /* COMMONWEALTH is the longest word it has to hold on one line at 360px. */
+  .hero h2{font-size:clamp(40px,12.4vw,72px);text-shadow:3px 2px 0 var(--pink)}
+  .herosub{font-size:15px}
+  .herohint{font-size:16px}
 }
-
 @media(max-width:759px){
   select,button,input[type=date],input[type=number]{min-height:44px}
   .chip{min-height:36px}
@@ -1203,7 +1199,7 @@ function apply(){
   const scope=S.searched
     ?(S.searched.narrowed?` in the ${S.searched.months.toLocaleString()} month${S.searched.months===1?"":"s"} that can match`:" across the archive")
     :` of ${S.rows.length.toLocaleString()} loaded`;
-  $("#count").innerHTML=`<b>${S.view.length.toLocaleString()}</b> contracts${scope} `+
+  $("#count").innerHTML=`<b>${S.view.length.toLocaleString()}</b> contract${S.view.length===1?"":"s"}${scope} `+
     `· <b>${money(tot)}</b> committed`+
     ` · <b title="Contracts whose end date has not yet passed">${money(live)}</b> still running`+
     `<span class="t-sub"> (${liveN.toLocaleString()} contracts${noEnd?`, ${noEnd.toLocaleString()} with no end date`:""})</span>`+
