@@ -240,6 +240,11 @@ td{padding:11px 10px;vertical-align:top}
 .flag{display:inline-block;font:700 11px var(--mono);padding:2px 6px;background:var(--tint);color:var(--ink);
   border:1.5px solid var(--ink);margin:2px 3px 0 0;white-space:nowrap}
 .alias{font:italic 12px var(--mono);color:var(--muted);margin-top:3px}
+/* The vendor behind an intermediary sale is the one pill printed in solid ink:
+   it is the answer to a question the notice itself does not answer. */
+.flag.vend{background:var(--ink);color:var(--on-ink);border-color:var(--ink);box-shadow:2px 2px 0 var(--pink)}
+.vend-ev{margin:6px 0 0;padding:8px 10px;border-left:3px solid var(--pink);background:var(--band)}
+.vend-ev b.conf{font:700 11px var(--mono);text-transform:uppercase;letter-spacing:.06em;color:var(--pink-ink)}
 .empty{padding:48px 16px;text-align:center;color:var(--ink);font:700 15px var(--mono)}
 
 @media(max-width:759px){
@@ -326,7 +331,13 @@ footer strong{font:900 17px var(--disp);text-transform:uppercase;letter-spacing:
   .iconbtn .ico{font-size:15px;line-height:1}
   #q{font-size:17px;box-shadow:4px 4px 0 var(--pink)}
 }
+/* No zoom jumps on a phone. iOS zooms the page whenever a field under 16px takes
+   focus, and a double tap zooms too; 16px fields and touch-action: manipulation
+   stop both. Pinch-zoom itself stays available — iOS ignores a viewport lock
+   anyway, and on Android it would shut out anyone who needs to enlarge the text. */
+html{touch-action:manipulation}
 @media(max-width:759px){
+  #q,select,input[type=date],input[type=number]{font-size:16px}
   select,button,input[type=date],input[type=number]{min-height:44px}
   .chip{min-height:36px}
   .tab{min-height:42px}
@@ -523,7 +534,7 @@ const FLAGS={
   limited_tender:"Awarded without open competition",
   long_term:"Runs longer than five years",
   agent_or_trustee:"Supplier name contains an agent, trustee or trading-as entity",
-  platform_or_reseller:"A platform, marketplace or reseller — the supplier named is the channel, not necessarily the capability bought",
+  reseller_sale:"Bought through a reseller or integrator that sells other vendors' products — the vendor behind it may not be the supplier named",
   source_disagreement:"A Senate Order snapshot reports a value that never appears anywhere in the AusTender API's history of this contract",
   late_amendment:"A Senate Order snapshot carried this contract's amended value more than 42 days before AusTender published the amendment",
   confidential:"The contract or its outputs carry confidentiality provisions",
@@ -719,7 +730,7 @@ function parseQuery(raw){
   return {raw:q, words, phrase:m?(m[1].toLowerCase().match(/[a-z0-9]+/g)||[]).join(" "):"",
           isPrefix:w=>prefixLast&&w===words[words.length-1]};
 }
-const rowText=r=>`${r.title||""} ${r.buyer||""} ${r.supplier||""} ${r.abn||""} ${r.cn||""}`;
+const rowText=r=>`${r.title||""} ${r.buyer||""} ${r.supplier||""} ${r.abn||""} ${r.cn||""} ${r.vendor||""}`;
 function matches(r,qq){
   if(!qq||!qq.words.length) return true;
   if(r._t===undefined) r._t=" "+tokenize(rowText(r)).join(" ")+" ";
@@ -988,6 +999,14 @@ function wire(){
        value, so an amendment published after a snapshot is not counted as a
        disagreement. Entities that do not report to AusTender, the NDIA among them,
        appear from their own Senate Order 13 listings.</div>`+
+       `<div class="note"><b>Resellers and the vendor behind them.</b> When a contract is
+       bought through a reseller or integrator, the notice names the channel, not whose
+       product it was. The archive marks those sales and, where evidence allows, names the
+       vendor: <i>stated</i> when the description says so; <i>likely</i> or <i>possible</i>
+       when it is inferred from other contracts between the same parties or from a published
+       partnership. Each inference shows its evidence and how often that rule is right when
+       tested against contracts whose vendor is named. Searching a vendor finds these
+       contracts too.</div>`+
        `<div class="note"><b>How search works.</b> Every word must begin a word in the
        contract's description, agency, supplier, ABN or CN ID, so <i>quant</i> finds
        Quantexa and <i>graph database</i> needs both words. Put a query in "quotes" for
@@ -1273,6 +1292,7 @@ function draw(){
     <td class="hide-m num" data-th="Start">${esc(fmtMY(r.start))}</td>
     <td class="hide-m num" data-th="End">${esc(fmtMY(r.end))}</td>
     <td data-th="Flags">${r._f.map(f=>`<span class="flag" title="${esc(FLAGS[f]||f)}">${esc(f.replace(/_/g," "))}</span>`).join("")}${
+      r.vendor?`<span class="flag vend" title="${r.vconf==="stated"?"The description names the vendor":"Presumed from evidence — open the contract to see why and how reliable the rule is"}">${r.vconf==="stated"?"":esc(r.vconf)+" "}${esc(r.vendor)}</span>`:""}${
       r.amendments?`<span class="flag" title="Amended ${r.amendments} time${r.amendments===1?"":"s"} since publication">amended ×${r.amendments}</span>`:""}${
       /so13/.test(r.src||"")?'<span class="flag" title="Published under Senate Order 13 by an entity that does not report to AusTender">outside AusTender</span>':
       (r.src==="historical"?'<span class="flag" title="Present only in the Department of Finance historical extracts">historical extract</span>':"")}</td>
@@ -1406,6 +1426,17 @@ document.addEventListener("click",async e=>{
       'it; the Commonwealth Procurement Rules allow 42 days. Where the figure never appears in AusTender at all, both '+
       'are Commonwealth publications of the same contract and neither is treated as correct.</div></dd>';
   }
+  if(d.intermediary){
+    const ev=d.vendor_evidence||[];
+    h+="<dt>Who is behind this sale</dt><dd>"+
+      `<div>${esc(d.intermediary)}, so the vendor whose product was bought is not recorded in the notice.</div>`+
+      (ev.length?ev.map(e=>`<div class="vend-ev"><b class="conf">${esc(e[1])}</b> · <b>${esc(e[0])}</b><div>${esc(e[3])}</div>`+
+        (e[4]?`<div><a href="${esc(e[4])}" target="_blank" rel="noopener">Source</a></div>`:"")+
+        ((e[5]||[]).length?`<div class="t-sub">e.g. ${e[5].map(esc).join(", ")}</div>`:"")+`</div>`).join("")
+        :'<div class="vend-ev">No evidence strong enough to name the vendor. Nothing is guessed.</div>')+
+      '<div class="t-sub" style="margin-top:6px">Anything other than <b>stated</b> is an inference from '+
+      'published records, not a published fact.</div></dd>';
+  }
   const link=so13?d.so13_source:cnUrl(r.cn);
   if(link) h+=`<dt>Source</dt><dd><a href="${esc(link)}" target="_blank" rel="noopener">${so13?"Open the listing":"Find on AusTender"}</a></dd>`;
   $("#dlg-b").innerHTML=h;
@@ -1421,7 +1452,7 @@ function exportCSV(){
     n:["atm_id","title","agency","cat","cat_title","atm_type","location","panel",
        "multi_agency","multi_stage","publish","close","open","closed","desc"],
     c:["cn","title","buyer","supplier","abn","value","value_first","cur","pub",
-       "start","end","amendments","flags","src"]
+       "start","end","amendments","flags","src","vendor","vconf"]
   };
   const cols=COLS[tab].slice();
   const src=tab==="s"?S.supView:tab==="n"?S.atmView:S.view;

@@ -1,0 +1,672 @@
+{
+ "note": "Vendor identification for contracts bought through an intermediary. Every alias was tested against the 157,697 software and IT contracts in the corpus before inclusion; aliases that matched the wrong thing are recorded under rejected_aliases. Partnerships are recorded only with a public source that was read and quoted. Inference is labelled by confidence and never presented as a published fact.",
+ "scope": {
+  "unspsc_prefixes": [
+   "4323",
+   "8111",
+   "8112",
+   "8116"
+  ],
+  "words": [
+   "software",
+   "licence",
+   "license",
+   "licences",
+   "licenses",
+   "licencing",
+   "licensing",
+   "subscription",
+   "saas",
+   "cloud",
+   "platform",
+   "maintenance and support"
+  ]
+ },
+ "vendors": {
+  "Microsoft": {
+   "aliases": [
+    "microsoft",
+    "m365",
+    "office 365",
+    "o365",
+    "azure",
+    "dynamics 365",
+    "sharepoint",
+    "power bi",
+    "powerbi",
+    "copilot",
+    "microsoft teams",
+    "windows server",
+    "sql server",
+    "intune",
+    "defender for endpoint"
+   ],
+   "entity": []
+  },
+  "Oracle": {
+   "aliases": [
+    "oracle",
+    "peoplesoft",
+    "jd edwards"
+   ],
+   "entity": []
+  },
+  "SAP": {
+   "aliases": [
+    "sap",
+    "successfactors",
+    "sap ariba",
+    "s/4hana",
+    "s4hana"
+   ],
+   "entity": []
+  },
+  "Salesforce": {
+   "aliases": [
+    "salesforce",
+    "tableau",
+    "mulesoft"
+   ],
+   "entity": [
+    "sfdc"
+   ]
+  },
+  "ServiceNow": {
+   "aliases": [
+    "servicenow",
+    "service now"
+   ],
+   "entity": []
+  },
+  "Adobe": {
+   "aliases": [
+    "adobe"
+   ],
+   "entity": []
+  },
+  "VMware": {
+   "aliases": [
+    "vmware"
+   ],
+   "entity": []
+  },
+  "Cisco": {
+   "aliases": [
+    "cisco",
+    "webex",
+    "meraki"
+   ],
+   "entity": []
+  },
+  "IBM": {
+   "aliases": [
+    "ibm",
+    "maximo",
+    "cognos",
+    "spss",
+    "qradar",
+    "filenet"
+   ],
+   "entity": [
+    "international business machines"
+   ]
+  },
+  "IBM i2": {
+   "aliases": [
+    "ibm i2",
+    "i2 analyst",
+    "analyst's notebook",
+    "analysts notebook",
+    "i2 ibase",
+    "ibase"
+   ],
+   "entity": [
+    "i2 group",
+    "harris computer",
+    "n harris"
+   ]
+  },
+  "Splunk": {
+   "aliases": [
+    "splunk"
+   ],
+   "entity": []
+  },
+  "Elastic": {
+   "aliases": [
+    "elasticsearch",
+    "elastic stack",
+    "elastic cloud"
+   ],
+   "entity": []
+  },
+  "Palantir": {
+   "aliases": [
+    "palantir"
+   ],
+   "entity": []
+  },
+  "Quantexa": {
+   "aliases": [
+    "quantexa"
+   ],
+   "entity": []
+  },
+  "Neo4j": {
+   "aliases": [
+    "neo4j"
+   ],
+   "entity": []
+  },
+  "TigerGraph": {
+   "aliases": [
+    "tigergraph"
+   ],
+   "entity": []
+  },
+  "Linkurious": {
+   "aliases": [
+    "linkurious"
+   ],
+   "entity": []
+  },
+  "Cambridge Intelligence": {
+   "aliases": [
+    "cambridge intelligence",
+    "keylines",
+    "regraph"
+   ],
+   "entity": [
+    "cambridge intelligence"
+   ]
+  },
+  "Snowflake": {
+   "aliases": [
+    "snowflake"
+   ],
+   "entity": []
+  },
+  "Databricks": {
+   "aliases": [
+    "databricks"
+   ],
+   "entity": []
+  },
+  "Informatica": {
+   "aliases": [
+    "informatica"
+   ],
+   "entity": []
+  },
+  "Collibra": {
+   "aliases": [
+    "collibra"
+   ],
+   "entity": []
+  },
+  "Alteryx": {
+   "aliases": [
+    "alteryx"
+   ],
+   "entity": []
+  },
+  "Qlik": {
+   "aliases": [
+    "qlik",
+    "qlikview",
+    "qlik sense"
+   ],
+   "entity": []
+  },
+  "SAS": {
+   "aliases": [
+    "sas institute",
+    "sas viya",
+    "sas software",
+    "sas enterprise",
+    "sas licence",
+    "sas license",
+    "sas analytics"
+   ],
+   "entity": [
+    "sas institute"
+   ]
+  },
+  "Esri": {
+   "aliases": [
+    "esri",
+    "arcgis"
+   ],
+   "entity": [
+    "esri"
+   ]
+  },
+  "Nuix": {
+   "aliases": [
+    "nuix"
+   ],
+   "entity": []
+  },
+  "Cellebrite": {
+   "aliases": [
+    "cellebrite"
+   ],
+   "entity": []
+  },
+  "Magnet Forensics": {
+   "aliases": [
+    "magnet forensics",
+    "magnet axiom"
+   ],
+   "entity": []
+  },
+  "Atlassian": {
+   "aliases": [
+    "atlassian",
+    "jira",
+    "confluence"
+   ],
+   "entity": []
+  },
+  "Red Hat": {
+   "aliases": [
+    "red hat",
+    "redhat",
+    "openshift"
+   ],
+   "entity": [
+    "red hat"
+   ]
+  },
+  "Citrix": {
+   "aliases": [
+    "citrix"
+   ],
+   "entity": []
+  },
+  "Amazon Web Services": {
+   "aliases": [
+    "amazon web services",
+    "aws"
+   ],
+   "entity": [
+    "amazon"
+   ]
+  },
+  "Google": {
+   "aliases": [
+    "google cloud",
+    "google workspace",
+    "gcp",
+    "bigquery"
+   ],
+   "entity": [
+    "google"
+   ]
+  },
+  "TechnologyOne": {
+   "aliases": [
+    "technologyone",
+    "technology one",
+    "ci anywhere"
+   ],
+   "entity": [
+    "technology one"
+   ]
+  },
+  "Workday": {
+   "aliases": [
+    "workday"
+   ],
+   "entity": []
+  },
+  "Objective": {
+   "aliases": [
+    "objective corporation",
+    "objective ecm",
+    "objective keystone",
+    "objective nexus"
+   ],
+   "entity": [
+    "objective corporation"
+   ]
+  },
+  "OpenText": {
+   "aliases": [
+    "opentext",
+    "open text"
+   ],
+   "entity": []
+  },
+  "Micro Focus": {
+   "aliases": [
+    "micro focus"
+   ],
+   "entity": [
+    "micro focus"
+   ]
+  },
+  "Genesys": {
+   "aliases": [
+    "genesys"
+   ],
+   "entity": []
+  },
+  "Okta": {
+   "aliases": [
+    "okta"
+   ],
+   "entity": []
+  },
+  "CrowdStrike": {
+   "aliases": [
+    "crowdstrike"
+   ],
+   "entity": []
+  },
+  "Palo Alto Networks": {
+   "aliases": [
+    "palo alto networks",
+    "prisma cloud",
+    "cortex xsoar"
+   ],
+   "entity": [
+    "palo alto"
+   ]
+  },
+  "Fortinet": {
+   "aliases": [
+    "fortinet",
+    "fortigate"
+   ],
+   "entity": []
+  },
+  "Zscaler": {
+   "aliases": [
+    "zscaler"
+   ],
+   "entity": []
+  },
+  "Tenable": {
+   "aliases": [
+    "tenable"
+   ],
+   "entity": []
+  },
+  "Rapid7": {
+   "aliases": [
+    "rapid7"
+   ],
+   "entity": []
+  },
+  "Mimecast": {
+   "aliases": [
+    "mimecast"
+   ],
+   "entity": []
+  },
+  "Proofpoint": {
+   "aliases": [
+    "proofpoint"
+   ],
+   "entity": []
+  },
+  "Trend Micro": {
+   "aliases": [
+    "trend micro"
+   ],
+   "entity": []
+  },
+  "Check Point": {
+   "aliases": [
+    "check point software",
+    "checkpoint firewall"
+   ],
+   "entity": [
+    "check point"
+   ]
+  },
+  "Commvault": {
+   "aliases": [
+    "commvault"
+   ],
+   "entity": []
+  },
+  "Veeam": {
+   "aliases": [
+    "veeam"
+   ],
+   "entity": []
+  },
+  "Veritas": {
+   "aliases": [
+    "veritas netbackup",
+    "veritas"
+   ],
+   "entity": []
+  },
+  "Rubrik": {
+   "aliases": [
+    "rubrik"
+   ],
+   "entity": []
+  },
+  "NetApp": {
+   "aliases": [
+    "netapp"
+   ],
+   "entity": []
+  },
+  "Nutanix": {
+   "aliases": [
+    "nutanix"
+   ],
+   "entity": []
+  },
+  "Autodesk": {
+   "aliases": [
+    "autodesk",
+    "autocad",
+    "revit"
+   ],
+   "entity": []
+  },
+  "MathWorks": {
+   "aliases": [
+    "mathworks",
+    "matlab",
+    "simulink"
+   ],
+   "entity": []
+  },
+  "GitHub": {
+   "aliases": [
+    "github"
+   ],
+   "entity": []
+  },
+  "GitLab": {
+   "aliases": [
+    "gitlab"
+   ],
+   "entity": []
+  },
+  "HashiCorp": {
+   "aliases": [
+    "hashicorp",
+    "terraform"
+   ],
+   "entity": []
+  },
+  "MongoDB": {
+   "aliases": [
+    "mongodb"
+   ],
+   "entity": []
+  },
+  "Confluent": {
+   "aliases": [
+    "confluent"
+   ],
+   "entity": []
+  },
+  "OpenAI": {
+   "aliases": [
+    "openai",
+    "chatgpt"
+   ],
+   "entity": []
+  },
+  "Anthropic": {
+   "aliases": [
+    "anthropic"
+   ],
+   "entity": []
+  },
+  "Dynatrace": {
+   "aliases": [
+    "dynatrace"
+   ],
+   "entity": []
+  },
+  "Datadog": {
+   "aliases": [
+    "datadog"
+   ],
+   "entity": []
+  },
+  "SolarWinds": {
+   "aliases": [
+    "solarwinds"
+   ],
+   "entity": []
+  },
+  "Ivanti": {
+   "aliases": [
+    "ivanti"
+   ],
+   "entity": []
+  },
+  "Jamf": {
+   "aliases": [
+    "jamf"
+   ],
+   "entity": []
+  },
+  "Kofax": {
+   "aliases": [
+    "kofax"
+   ],
+   "entity": []
+  },
+  "UiPath": {
+   "aliases": [
+    "uipath"
+   ],
+   "entity": []
+  },
+  "Pegasystems": {
+   "aliases": [
+    "pegasystems",
+    "pega"
+   ],
+   "entity": [
+    "pegasystems"
+   ]
+  },
+  "Appian": {
+   "aliases": [
+    "appian"
+   ],
+   "entity": []
+  },
+  "DocuSign": {
+   "aliases": [
+    "docusign"
+   ],
+   "entity": []
+  },
+  "Zoom": {
+   "aliases": [
+    "zoom video"
+   ],
+   "entity": []
+  },
+  "Qualtrics": {
+   "aliases": [
+    "qualtrics"
+   ],
+   "entity": []
+  },
+  "Thomson Reuters": {
+   "aliases": [
+    "thomson reuters",
+    "westlaw"
+   ],
+   "entity": [
+    "thomson reuters"
+   ]
+  },
+  "LexisNexis": {
+   "aliases": [
+    "lexisnexis",
+    "lexis nexis"
+   ],
+   "entity": []
+  },
+  "Bentley Systems": {
+   "aliases": [
+    "bentley systems",
+    "microstation"
+   ],
+   "entity": []
+  },
+  "Hexagon": {
+   "aliases": [
+    "hexagon geospatial",
+    "erdas"
+   ],
+   "entity": []
+  },
+  "Axon": {
+   "aliases": [
+    "axon evidence",
+    "evidence.com"
+   ],
+   "entity": []
+  }
+ },
+ "rejected_aliases": {
+  "sas": "the Special Air Service in Defence contracts; only SAS Institute and named SAS products are matched",
+  "i2": "part numbers and model codes; only IBM i2, Analyst's Notebook and iBase are matched",
+  "elastic": "an ordinary word; only Elasticsearch, Elastic Stack and Elastic Cloud are matched",
+  "objective": "an ordinary word; only Objective Corporation and its named products are matched",
+  "slack": "an ordinary word",
+  "teams": "an ordinary word",
+  "content server": "matched a FatWire product, not OpenText",
+  "zoom": "an ordinary word; only Zoom Video is matched"
+ },
+ "partners": [
+  {
+   "supplier": "Intech Solutions Pty Ltd",
+   "abn": "45002812697",
+   "vendor": "TigerGraph",
+   "keywords": [
+    "graph"
+   ],
+   "buyers": [
+    "Australian Taxation Office"
+   ],
+   "evidence": "TigerGraph, the only scalable graph database for the enterprise, and Intech Solutions, a leading provider of information quality solutions, recently announced a multi-year deal with the Australian Taxation Office (ATO).",
+   "source": "https://www.intechsolutions.com.au/iq-office-tigergraph/",
+   "checked": "2026-09-15"
+  }
+ ],
+ "unconfirmed": [
+  {
+   "supplier": "Visual Analysis Pty Ltd",
+   "vendor": "IBM i2",
+   "why": "Described in search listings as the authorised i2 distributor, but its website now redirects to Intelli343, which does not mention i2. Not recorded as a partnership; its own contracts naming i2 and iBase are the evidence instead."
+  }
+ ]
+}

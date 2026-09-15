@@ -58,6 +58,33 @@ or CN ID, except the last, which matches as a prefix while it is being typed: `q
 finds Quantexa, and `graph database` does not also mean "graphic database". A query in
 quotes must appear as an exact phrase.
 
+## Resellers and the vendor behind them
+
+When software is bought through a reseller or integrator, the notice names the channel,
+not whose product it was. `vendors.py` identifies those sales and, where the evidence
+allows, the vendor.
+
+A supplier counts as an intermediary when its software contracts name three or more
+other vendors, when it is a known licensing channel, or when a published partnership
+says so. **126 suppliers and 47,594 contracts** qualify. For each, the vendor is:
+
+- **stated** — the description names it (4,110 contracts);
+- **likely** — a published announcement names the supplier, vendor and buyer, or other
+  contracts between the same parties consistently name one vendor (2,513);
+- otherwise left blank (40,971). Nothing is guessed below that.
+
+The pattern rules are tested on every build by hiding the vendor on contracts that name
+one and asking the rule to recover it. At the current thresholds the agency-and-supplier
+rule is right **91.6%** of the time (1,385 contracts) and the supplier rule **95.6%**
+(298). Loosening the first to two contracts and 60% dropped it to 81.7%. Each presumption
+on the site carries its rule's measured accuracy.
+
+`data/vendors.json` holds the vendor lexicon — every alias tested against 157,697 software
+contracts, with rejected ones and why (`sas` is also the Special Air Service) — and the
+partnerships, each quoted from a page that was read. A vendor selling its own product is
+never flagged: a Palantir contract for Palantir is the case where the vendor is not in
+question.
+
 ## Senate Order snapshots against the API
 
 A snapshot lists a contract as it stood at the end of its reporting period, so it is

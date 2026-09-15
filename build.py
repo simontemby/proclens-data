@@ -37,12 +37,13 @@ from collections import Counter, defaultdict
 from datetime import date, datetime, timezone
 
 import refresh
+import vendors
 
 DATA = os.environ.get("PROCLENS_DATA", "data")
 
 LIST_FIELDS = ["cn", "title", "buyer", "supplier", "abn", "value", "value_first", "cur",
-               "pub", "start", "end", "amendments", "flags", "src"]
-LIST_DICT = ("buyer", "supplier", "abn", "cur", "flags", "src")
+               "pub", "start", "end", "amendments", "flags", "src", "vendor", "vconf"]
+LIST_DICT = ("buyer", "supplier", "abn", "cur", "flags", "src", "vendor", "vconf")
 
 DETAIL_FIELDS = [
     "cn", "signed", "method", "cat", "category", "agency_ref", "amended", "trail",
@@ -53,12 +54,12 @@ DETAIL_FIELDS = [
     "supplier_country", "amend_trail", "hist_amendments",
     "senate_obs", "senate_mismatch", "v_api", "v_export", "v_hist", "v_senate",
     "so13_entity", "so13_period", "so13_type", "so13_variations", "so13_approached",
-    "so13_source"]
+    "so13_source", "intermediary", "vendor_evidence"]
 DETAIL_DICT = ("method", "category", "conf_contract", "conf_outputs", "consultancy",
                "consultancy_reason", "conf_contract_reason", "conf_outputs_reason",
                "agency_branch", "agency_division", "supplier_city", "supplier_country",
                "panel", "so13_entity", "so13_period", "so13_type", "so13_source",
-               "first_seen", "last_seen")
+               "first_seen", "last_seen", "intermediary")
 
 # Senate Order reports list contracts current at the end of their period.
 PERIOD_END = {"CY": "12-31", "FY": "06-30"}
@@ -421,10 +422,18 @@ def merge_all(report):
     only["so13"] = len(so13)
     report["only_in"] = dict(only)
 
-    # 5. Flags, source label, and the export/API comparison for the report.
+    # 5. Whose product an intermediary sold, where the evidence allows.
+    vendors.infer(corpus, DATA, report)
+
+    # 6. Flags, source label, and the export/API comparison for the report.
     export_diff = 0
     for rec in corpus.values():
         f = [x for x in refresh.flag(rec).split(",") if x] if rec.get("value") is not None or rec.get("pub") else []
+        # The supplier-name rule is superseded by vendors.infer, which also uses
+        # what each supplier's contracts name.
+        f = [x for x in f if x != "platform_or_reseller"]
+        if rec.get("intermediary"):
+            f.append("reseller_sale")
         mm = rec.get("senate_mismatch") or []
         if any(b[3] == "differs" for b in mm):
             f.append("source_disagreement")
@@ -462,7 +471,7 @@ TOKEN_RE = re.compile(r"[a-z0-9]+")
 def tokens(rec):
     """Must match tokenize() in index.html exactly, or a search would skip a
     month that holds a match."""
-    text = " ".join(str(rec.get(k) or "") for k in ("title", "buyer", "supplier", "abn", "cn"))
+    text = " ".join(str(rec.get(k) or "") for k in ("title", "buyer", "supplier", "abn", "cn", "vendor"))
     out = set()
     for t in TOKEN_RE.findall(text.lower()):
         if len(t) < 2 or len(t) > 40:
