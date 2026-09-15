@@ -178,13 +178,41 @@ dialog#filterSheet::backdrop{background:rgba(20,25,56,.55)}
 /* Before anyone has asked anything, only the search field and the date range
    are useful. The rest appears with the results. */
 body.landing #grp-value,body.landing #agency,body.landing #sort,body.landing #chips,body.landing #csv{display:none}
-.hero{margin:7vh 0 11vh;max-width:1000px}
-.hero h2{margin:0 0 20px;font:900 clamp(56px,9vw,132px)/.86 var(--disp);text-transform:uppercase;letter-spacing:.005em;
-  color:var(--ink);max-width:11ch;text-wrap:balance;text-shadow:4px 3px 0 var(--pink)}
-.herosub{margin:0 0 24px;font:700 18px/1.45 var(--mono);color:var(--ink);max-width:44ch;transform:rotate(-.6deg)}
-.herohint{display:inline-block;margin:0;padding:9px 15px;font:700 19px var(--mono);color:#233b86;background:var(--pink);
+/* Before a search the result count and loading line describe three months nobody
+   asked about, and pushed the landing below the fold. */
+body.landing #count,body.landing #bgstat,body.landing #prog{display:none}
+body.landing .tools{padding-bottom:12px}
+/* The landing is one composed screen, never a scroll. Type is sized against the
+   viewport's height as well as its width: sized by width alone, the headline set
+   at 132px ran four lines deep and pushed everything past the fold. */
+.hero{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:clamp(24px,5vw,72px);
+  align-items:center;margin:clamp(20px,5svh,56px) 0 clamp(20px,5svh,56px)}
+.hero h2{margin:0 0 clamp(12px,2.2svh,22px);font:900 clamp(40px,min(6.4vw,10.5svh),112px)/.86 var(--disp);
+  text-transform:uppercase;letter-spacing:.005em;color:var(--ink);max-width:12ch;text-wrap:balance;
+  text-shadow:.04em .03em 0 var(--pink)}
+.herosub{margin:0 0 clamp(14px,2.4svh,24px);font:700 clamp(14px,1.9svh,17px)/1.45 var(--mono);color:var(--ink);max-width:48ch}
+.herohint{display:inline-block;margin:0;padding:8px 14px;font:700 clamp(16px,2.2svh,19px) var(--mono);color:#233b86;background:var(--pink);
   transform:rotate(1.2deg);box-shadow:3px 3px 0 var(--ink)}
-@media(prefers-reduced-motion:reduce){.herosub,.herohint{transform:none}}
+/* What the archive holds, printed like a zine's back-cover tally. */
+.hero-stats{margin:0;display:grid;gap:0;border:3px solid var(--ink);background:var(--card);box-shadow:8px 8px 0 var(--pink);transform:rotate(-.8deg)}
+.hero-stats div{padding:clamp(10px,1.8svh,16px) 18px;border-top:2px dashed var(--line)}
+.hero-stats div:first-child{border-top:0}
+.hero-stats dt{font:700 11px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.hero-stats dd{margin:2px 0 0;font:900 clamp(30px,min(3.6vw,6svh),52px)/1 var(--disp);letter-spacing:.01em;color:var(--ink)}
+.hero-stats dd small{display:block;margin-top:4px;font:700 12px var(--mono);letter-spacing:0;color:var(--pink-ink)}
+@media(max-width:899px){
+  .hero{grid-template-columns:minmax(0,1fr);gap:18px;margin:18px 0}
+  .hero h2{font-size:clamp(34px,11vw,64px)}
+  .herosub{font-size:14px}
+  .herohint{font-size:15px}
+  .hero-stats{grid-template-columns:repeat(3,minmax(0,1fr));transform:none;box-shadow:5px 5px 0 var(--pink)}
+  .hero-stats div{padding:9px 10px;border-top:0;border-left:2px dashed var(--line)}
+  .hero-stats div:first-child{border-left:0}
+  .hero-stats dt{font-size:9.5px}
+  .hero-stats dd{font-size:clamp(20px,6.4vw,30px)}
+  .hero-stats dd small{font-size:10px}
+}
+@media(prefers-reduced-motion:reduce){.herohint,.hero-stats{transform:none}}
 
 /* ---------- results: real table ≥760px, stacked cards below ---------- */
 table{width:100%;border-collapse:collapse;font-size:14px}
@@ -297,10 +325,6 @@ footer strong{font:900 17px var(--disp);text-transform:uppercase;letter-spacing:
   .iconbtn .lbl{display:none}
   .iconbtn .ico{font-size:15px;line-height:1}
   #q{font-size:17px;box-shadow:4px 4px 0 var(--pink)}
-  /* COMMONWEALTH is the longest word it has to hold on one line at 360px. */
-  .hero h2{font-size:clamp(40px,12.4vw,72px);text-shadow:3px 2px 0 var(--pink)}
-  .herosub{font-size:15px}
-  .herohint{font-size:16px}
 }
 @media(max-width:759px){
   select,button,input[type=date],input[type=number]{min-height:44px}
@@ -388,10 +412,14 @@ footer strong{font:900 17px var(--disp);text-transform:uppercase;letter-spacing:
 
 <section class="wrap" id="landing">
   <div class="hero">
-    <h2>Search Australian Commonwealth contracts</h2>
-    <p class="herosub">Contract notices, Senate Order snapshots and the historical
-      extracts, searchable together.</p>
-    <p class="herohint">Type above, or set a date range, to begin.</p>
+    <div class="hero-main">
+      <h2>Search every Commonwealth contract</h2>
+      <p class="herosub">Every Australian Government contract notice since 2014, each
+        amendment, the Senate Order snapshots and the NDIA's own listings — one record
+        per contract.</p>
+      <p class="herohint">Type a supplier, agency, ABN or CN above.</p>
+    </div>
+    <dl class="hero-stats" id="heroStats" aria-label="What the archive holds"></dl>
   </div>
 </section>
 
@@ -792,6 +820,15 @@ async function boot(){
     `${String(idx.generated||"").slice(11,19)} UTC · ${idx.months.length} months · `+
     `${Object.keys(idx.terms||{}).length.toLocaleString()} search-index files.`;
 
+  // The landing tally, from the build's own totals.
+  // The first year with real coverage, not the first stray record: the extracts
+  // hold a single contract dated 1999.
+  const yrs=Object.entries(t.by_year||{}).filter(([y,n])=>/^\d{4}$/.test(y)&&n>=10000).map(([y])=>y).sort();
+  const compact=v=>v>=1e12?`$${(v/1e12).toFixed(2)} trillion`:v>=1e9?`$${(v/1e9).toFixed(1)} billion`:money(v);
+  $("#heroStats").innerHTML=
+    `<div><dt>Contracts</dt><dd>${(t.contracts||0).toLocaleString()}<small>each counted once</small></dd></div>`+
+    `<div><dt>Committed</dt><dd>${compact(t.value_aud||0).replace(" trillion","T").replace(" billion","B")}<small>${esc(compact(t.value_aud||0))}</small></dd></div>`+
+    `<div><dt>Complete from</dt><dd>2014<small>partial back to ${esc(yrs[0]||"")}</small></dd></div>`;
   buildAgencies(); buildChips(); wire();
   await ensureMonths(monthsFor(S.d1,S.d2));
   // No automatic full download. When search needed the whole archive in memory
