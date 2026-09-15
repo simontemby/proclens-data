@@ -212,6 +212,20 @@ body.landing .tools{padding-bottom:12px}
   .hero-stats dd{font-size:clamp(20px,6.4vw,30px)}
   .hero-stats dd small{font-size:10px}
 }
+/* After the narrow-screen rules on purpose, so a phone on its side takes these.
+   Short screens — a small window, a phone on its side — lose the subhead and the
+   tally's footnotes before the landing is allowed to scroll. */
+@media(max-height:700px){
+  .herosub,.hero-stats dd small{display:none}
+  .hero{margin:12px 0}
+  .hero h2{margin-bottom:10px}
+}
+@media(max-height:480px){
+  .hero-stats{display:none}
+  .hero{margin:8px 0}
+  .hero h2{font-size:clamp(26px,9svh,40px)}
+  .herohint{font-size:14px;padding:6px 10px}
+}
 @media(prefers-reduced-motion:reduce){.herohint,.hero-stats{transform:none}}
 
 /* ---------- results: real table ≥760px, stacked cards below ---------- */
