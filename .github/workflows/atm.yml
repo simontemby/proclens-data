@@ -1,12 +1,16 @@
 name: Approaches to market
 
 # AusTender publishes the current ATM list as 75 RSS items and keeps no archive,
-# so a notice that opens and closes between two polls is lost for good. Three
-# times a day is the cheap insurance: approaches usually stay open for weeks, so
-# the interval is generous even when the writer guard makes a run stand down.
+# so a notice that opens and closes between two polls is lost for good.
+#
+# Wednesday and Friday nights, Canberra time. Approaches usually stay open for
+# weeks, so twice a week catches almost everything — but the feed holds only 75
+# notices, and a busy stretch can turn over faster than that. Anything that opens
+# and closes inside one gap is gone permanently, which three runs a day made
+# nearly impossible and this schedule does not.
 on:
   schedule:
-    - cron: "15 2,10,18 * * *"
+    - cron: "30 11 * * 3,5"   # 21:30 AEST / 22:30 AEDT, Wednesday and Friday
   workflow_dispatch:
     inputs:
       refresh_detail:
@@ -35,7 +39,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           busy=0
-          for wf in refresh.yml backfill-resume.yml senate.yml so13.yml historical.yml atm.yml export.yml; do
+          for wf in refresh.yml backfill-resume.yml senate.yml so13.yml historical.yml atm.yml export.yml graph.yml; do
             [ "$wf" = "atm.yml" ] && continue
             n=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow "$wf" \
                   --status in_progress --json databaseId --jq 'length' 2>/dev/null || echo 0)

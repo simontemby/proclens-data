@@ -1,0 +1,90 @@
+name: Resolve suppliers (graph)
+
+# The archive keys suppliers on ABN, which splits companies apart: 23,446 ABNs
+# publish under more than one name, and one name can cover sixteen ABNs. This
+# loads suppliers, their names, postcodes and customers into Neo4j and takes the
+# connected components as organisations.
+#
+# Neo4j runs here, on GitHub's runner, for the few minutes the job lasts. Nothing
+# is installed anywhere and nothing is hosted: the result is a JSON grouping
+# committed beside the corpus, with the evidence for every group.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 15 12 * *"   # the 12th monthly, after the historical ingest
+
+permissions:
+  contents: write
+
+concurrency:
+  group: archive-write
+  cancel-in-progress: false
+
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Refuse to run alongside another archive writer
+        id: guard
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          busy=0
+          for wf in refresh.yml backfill-resume.yml senate.yml so13.yml historical.yml atm.yml export.yml graph.yml; do
+            [ "$wf" = "graph.yml" ] && continue
+            n=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow "$wf" \
+                  --status in_progress --json databaseId --jq 'length' 2>/dev/null || echo 0)
+            busy=$((busy + n))
+          done
+          echo "other archive writers in flight: $busy"
+          [ "$busy" -gt 0 ] && echo "skip=true" >> $GITHUB_OUTPUT || echo "skip=false" >> $GITHUB_OUTPUT
+
+      - uses: actions/checkout@v5
+        if: steps.guard.outputs.skip != 'true'
+      - uses: actions/setup-python@v6
+        if: steps.guard.outputs.skip != 'true'
+        with:
+          python-version: "3.12"
+      - run: pip install neo4j requests
+        if: steps.guard.outputs.skip != 'true'
+
+      # Started as a plain container rather than a service, so the Graph Data
+      # Science plugin can be requested and the log read if it fails to come up.
+      - name: Start Neo4j with Graph Data Science
+        if: steps.guard.outputs.skip != 'true'
+        run: |
+          docker run -d --name neo4j -p 7687:7687 \
+            -e NEO4J_AUTH=neo4j/${{ secrets.NEO4J_PASSWORD || 'testtest' }} \
+            -e NEO4J_PLUGINS='["graph-data-science"]' \
+            -e NEO4J_server_memory_heap_max__size=3G \
+            -e NEO4J_server_memory_pagecache_size=1G \
+            -e NEO4J_dbms_security_procedures_unrestricted='gds.*' \
+            neo4j:5-community
+          for i in $(seq 1 60); do
+            if docker logs neo4j 2>&1 | grep -q "Started."; then echo "neo4j up after $((i*5))s"; break; fi
+            sleep 5
+          done
+          docker logs neo4j 2>&1 | tail -5
+
+      - name: Resolve
+        if: steps.guard.outputs.skip != 'true'
+        env:
+          NEO4J_PASSWORD: ${{ secrets.NEO4J_PASSWORD || 'testtest' }}
+        run: python graph.py --out data/supplier_groups.json
+
+      - name: Neo4j log on failure
+        if: failure()
+        run: docker logs neo4j 2>&1 | tail -60
+
+      - name: Commit the grouping
+        if: steps.guard.outputs.skip != 'true'
+        run: |
+          git config user.name "legal-tender-bot"
+          git config user.email "legal-tender-bot@users.noreply.github.com"
+          git pull --rebase --autostash origin main || { git rebase --abort 2>/dev/null || true; }
+          if grep -rlq '^<<<<<<< ' data 2>/dev/null; then
+            echo 'refusing to commit: conflict markers in data/' >&2; exit 1
+          fi
+          git add data/supplier_groups.json
+          git diff --staged --quiet || { git commit -m "Supplier groups $(date -u +%F)"; git push; }
