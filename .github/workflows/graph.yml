@@ -1,9 +1,10 @@
 name: Resolve suppliers (graph)
 
 # The archive keys suppliers on ABN, which splits companies apart: 23,446 ABNs
-# publish under more than one name, and one name can cover sixteen ABNs. This
-# loads suppliers, their names, postcodes and customers into Neo4j and takes the
-# connected components as organisations.
+# publish under more than one name. This loads suppliers, their names, postcodes
+# and customers into Neo4j and groups the ABNs that principally trade under the
+# same distinctive name. Groups are per name and are never chained together —
+# chaining welded 901 unrelated ABNs into one "organisation" on the first run.
 #
 # Neo4j runs here, on GitHub's runner, for the few minutes the job lasts. Nothing
 # is installed anywhere and nothing is hosted: the result is a JSON grouping
