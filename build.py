@@ -54,7 +54,7 @@ DETAIL_FIELDS = [
     "supplier_country", "amend_trail", "hist_amendments",
     "senate_obs", "senate_mismatch", "v_api", "v_export", "v_hist", "v_senate",
     "so13_entity", "so13_period", "so13_type", "so13_variations", "so13_approached",
-    "so13_source", "intermediary", "vendor_evidence"]
+    "so13_source", "intermediary", "vendor_evidence", "value_concat"]
 DETAIL_DICT = ("method", "category", "conf_contract", "conf_outputs", "consultancy",
                "consultancy_reason", "conf_contract_reason", "conf_outputs_reason",
                "agency_branch", "agency_division", "supplier_city", "supplier_country",
@@ -65,6 +65,30 @@ DETAIL_DICT = ("method", "category", "conf_contract", "conf_outputs", "consultan
 PERIOD_END = {"CY": "12-31", "FY": "06-30"}
 # Values are published to the cent. A difference below a dollar is rounding.
 TOLERANCE = 1.0
+# Two sources can differ honestly: a historical extract is a snapshot, so a
+# contract that later grew by amendment reads low there. A hundredfold gap is
+# not that. The Treasury records a $123bn contract with Hays for "Human
+# Resource Services" where the extract records nothing; one of the two is a
+# typing mistake, and the archive does not get to decide which by itself.
+CONTRADICTION = 100.0
+
+
+def concatenated(value, trail):
+    """Some implausible values are two amendments typed into one field.
+    CN3491208's $123,000,198,000 is its $123,000 amendment followed by its
+    $198,000 amendment, digit for digit, and the historical extract records
+    $198,000. Where that is what happened, the archive can say so exactly
+    instead of only noting that the sources differ."""
+    if not isinstance(value, (int, float)) or value < 1e6 or not trail:
+        return None
+    whole = f"{int(round(value))}"
+    parts = sorted({int(round(t[1])) for t in trail
+                    if isinstance(t[1], (int, float)) and 1000 <= t[1] < value / CONTRADICTION})
+    for a in parts:
+        for b in parts:
+            if f"{a}{b}" == whole:
+                return [a, b]
+    return None
 # The Commonwealth Procurement Rules allow 42 days to report a contract or an
 # amendment to it on AusTender.
 PUBLISH_DAYS = 42
@@ -434,6 +458,16 @@ def merge_all(report):
         f = [x for x in f if x != "platform_or_reseller"]
         if rec.get("intermediary"):
             f.append("reseller_sale")
+        others = [rec[k] for k in ("v_export", "v_hist", "v_senate")
+                  if isinstance(rec.get(k), (int, float))]
+        v = rec.get("value")
+        if isinstance(v, (int, float)) and others and abs(v) > 0:
+            lo, hi = min(others), max(others)
+            if abs(lo) * CONTRADICTION <= abs(v) or abs(v) * CONTRADICTION <= abs(hi):
+                f.append("value_contradicted")
+        cc = concatenated(v, rec.get("trail"))
+        if cc:
+            rec["value_concat"] = cc
         mm = rec.get("senate_mismatch") or []
         if any(b[3] == "differs" for b in mm):
             f.append("source_disagreement")
@@ -453,6 +487,9 @@ def merge_all(report):
                 abs(rec["v_api"] - rec["v_export"]) > TOLERANCE:
             export_diff += 1
     report["api_vs_export_current_value_differs"] = export_diff
+    report["value_contradicted"] = sum(1 for r in corpus.values()
+                                       if "value_contradicted" in (r.get("flags") or ""))
+    report["value_concatenated"] = sum(1 for r in corpus.values() if r.get("value_concat"))
     report["contracts"] = len(corpus)
     return corpus
 
@@ -601,6 +638,13 @@ def main():
                                      and (r.get("cur") or "AUD") == "AUD"), 2),
               "by_year": dict(sorted(Counter((r.get("pub") or "")[:4] or "none"
                                              for r in corpus.values()).items()))}
+    # How much of the headline figure rests on a contract another source
+    # contradicts. It is small in count and large in money, so the page says so
+    # rather than leaving a reader to assume the total is all of a piece.
+    contra = [r for r in corpus.values() if "value_contradicted" in (r.get("flags") or "")
+              and isinstance(r.get("value"), (int, float))]
+    totals["contradicted"] = {"contracts": len(contra),
+                              "value_aud": round(sum(r["value"] for r in contra), 2)}
     flag_counts = Counter(f for r in corpus.values() for f in (r.get("flags") or "").split(",") if f)
     report["terms"] = sum(len(v) for v in postings.values())
     report["term_shards"] = len(postings)

@@ -549,6 +549,7 @@ const FLAGS={
   long_term:"Runs longer than five years",
   agent_or_trustee:"Supplier name contains an agent, trustee or trading-as entity",
   reseller_sale:"Bought through a reseller or integrator that sells other vendors' products — the vendor behind it may not be the supplier named",
+  value_contradicted:"Another source records a value at least a hundred times different — one of the two is a data-entry error, and this archive publishes both rather than choosing",
   source_disagreement:"A Senate Order snapshot reports a value that never appears anywhere in the AusTender API's history of this contract",
   late_amendment:"A Senate Order snapshot carried this contract's amended value more than 42 days before AusTender published the amendment",
   confidential:"The contract or its outputs carry confidentiality provisions",
@@ -852,7 +853,9 @@ async function boot(){
   const compact=v=>v>=1e12?`$${(v/1e12).toFixed(2)} trillion`:v>=1e9?`$${(v/1e9).toFixed(1)} billion`:money(v);
   $("#heroStats").innerHTML=
     `<div><dt>Contracts</dt><dd>${(t.contracts||0).toLocaleString()}<small>each counted once</small></dd></div>`+
-    `<div><dt>Committed</dt><dd>${compact(t.value_aud||0).replace(" trillion","T").replace(" billion","B")}<small>${esc(compact(t.value_aud||0))}</small></dd></div>`+
+    `<div><dt>Committed</dt><dd>${compact(t.value_aud||0).replace(" trillion","T").replace(" billion","B")}`+
+      `<small>${esc(compact(t.value_aud||0))}${(t.contradicted||{}).contracts
+        ? ` · ${compact(t.contradicted.value_aud).replace(" trillion","T").replace(" billion","B")} disputed`:""}</small></dd></div>`+
     `<div><dt>Complete from</dt><dd>2014<small>partial back to ${esc(yrs[0]||"")}</small></dd></div>`;
   buildAgencies(); buildChips(); wire();
   await ensureMonths(monthsFor(S.d1,S.d2));
@@ -1410,6 +1413,23 @@ document.addEventListener("click",async e=>{
   let h=rows.filter(([,v])=>v!=null&&v!==""&&v!=="—").map(([k,v])=>`<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("");
   if(r._f.length) h+="<dt>Flags</dt><dd>"+r._f.map(f=>
     `<div><b>${esc(f.replace(/_/g," "))}</b> — ${esc(FLAGS[f]||"")}</div>`).join("")+"</dd>";
+  // Where the sources disagree about the money, all of them are shown. The
+  // archive keeps every source's figure; this is where a reader sees why.
+  {const SV=[["AusTender API","v_api"],["Weekly export","v_export"],
+             ["Historical extract","v_hist"],["Senate snapshot","v_senate"]]
+      .filter(([,k])=>typeof d[k]==="number");
+   if(SV.length>1&&Math.max(...SV.map(([,k])=>d[k]))-Math.min(...SV.map(([,k])=>d[k]))>1)
+     h+="<dt>What each source records</dt><dd>"+SV.map(([n,k])=>
+       `<div>${esc(n)} — <b>${money(d[k])}</b></div>`).join("")+
+       '<div class="t-sub" style="margin-top:6px">'+
+       (d.value_concat
+         ? `AusTender's figure is this contract's ${money(d.value_concat[0])} and ${money(d.value_concat[1])} `+
+           "amendments run together, digit for digit — a data-entry error at the source. The archive publishes "+
+           "what each source states and corrects neither."
+         : r._f.includes("value_contradicted")
+           ? "These differ by a hundredfold or more, so one of them is a typing mistake. The archive does not know which, and changes neither."
+           : "A historical extract is a snapshot, so a contract later amended upwards reads low there.")+
+       "</div></dd>";}
   // The API's own release history: what the contract was worth at each publication.
   if((d.trail||[]).length>1)
     h+="<dt>Value history</dt><dd>"+d.trail.map((t,i)=>

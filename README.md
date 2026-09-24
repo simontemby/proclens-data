@@ -100,6 +100,33 @@ today's value. Of the contracts where the two still differ:
 
 Every flag in this archive is a queue for review, never a finding.
 
+## Values that cannot all be right
+
+The headline total is **$1,625.6 billion**, and **$266.8 billion of it — 16.4% — sits in
+1,026 contracts where another source records a value at least a hundred times different**.
+Those carry `value_contradicted`, and the contract's own page shows what each source
+states. The archive changes neither figure.
+
+Two of them can be explained exactly, and they are the two largest numbers in the whole
+archive:
+
+| Contract | AusTender records | Historical extract | What happened |
+|---|---|---|---|
+| CN3491208, Hays / Treasury | $123,000,198,000 | $198,000 | its $123,000 and $198,000 amendments, run together |
+| CN3497785, Gilbert + Tobin / Treasury | $121,149,136,502 | $121,149 | its $121,149 and $136,502 amendments, run together |
+
+Both were amended on 27 April 2023, and in each case the value published that day is the
+digits of the two preceding amendments with nothing between them. That is $244 billion —
+15% of the archive's total — in two mistyped fields. The rule that finds this is narrow:
+the published figure has to equal two of the contract's own earlier values concatenated,
+each at least $1,000 and at least a hundred times smaller. It matches nothing else in
+1.3 million contracts.
+
+A lower figure in a historical extract is usually not a disagreement at all: an extract is
+a snapshot, so a contract later amended upwards reads low there. The Joint Strike Fighter
+account reads $14.0 billion in the extracts and $17.4 billion now, and both are right.
+That is why the flag needs a hundredfold gap, not any gap.
+
 ## Corrections
 
 An earlier version of this archive, and of this README, was wrong in ways that affected
