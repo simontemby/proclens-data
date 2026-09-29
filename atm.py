@@ -352,10 +352,15 @@ def atom(alerts, generated, site):
            " Publication is not an award; nothing here has been won by anyone."
            "</subtitle>"]
     for a in alerts[:200]:
-        url = f"{SITE}/{a.get('kind') or 'Atm'}/Show/{a['guid']}"
+        # A BuyICT opportunity lives on BuyICT. Building its address from the
+        # AusTender pattern produced a working-looking link to a page that has
+        # never existed, on every alert this feed raised from that platform.
+        url = a.get("detail") or f"{SITE}/{a.get('kind') or 'Atm'}/Show/{a['guid']}"
         body = (f"Watch: {a['watch']}\nAgency: {a.get('agency') or 'not stated'}\n"
                 f"Category: {a.get('cat_title') or a.get('cat') or 'not stated'}\n"
-                f"ATM type: {a.get('atm_type') or 'not stated'}\n"
+                f"{'Kind' if a.get('kind') == 'BuyICT' else 'ATM type'}: "
+                f"{a.get('atm_type') or 'not stated'}\n"
+                f"{'Source: BuyICT (not published to AusTender)' + chr(10) if a.get('kind') == 'BuyICT' else ''}"
                 f"Panel arrangement: {a.get('panel') or 'not stated'}\n"
                 f"Closes: {a.get('close') or 'not stated'}\n\n{a.get('desc') or ''}")
         out += ["<entry>",
@@ -487,6 +492,12 @@ def main():
     # Matched from a pool, never a merged store: the shards, the totals and the
     # capture date below all describe AusTender's notices alone.
     pool = dict(store, **buyict)
+    # Alerts already in the feed are not raised again, so a fix to how their
+    # address is built would never reach them. Repair them in place instead.
+    for a in alerts:
+        r = pool.get(a.get("guid"))
+        if r and r.get("kind") == "BuyICT" and not a.get("detail"):
+            a["detail"] = r.get("detail")
     for guid in candidates:
         r = pool[guid]
         hay = haystack(r)
@@ -504,6 +515,7 @@ def main():
                            "cat": r.get("cat"), "cat_title": r.get("cat_title"),
                            "atm_type": r.get("atm_type"), "panel": r.get("panel"),
                            "close": r.get("close"), "desc": (r.get("desc") or "")[:400],
+                           "detail": r.get("detail") if r.get("kind") == "BuyICT" else None,
                            "hit": hit, "seen": seen})
             fresh += 1
     alerts.sort(key=lambda a: a.get("seen") or "", reverse=True)
