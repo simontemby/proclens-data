@@ -275,9 +275,25 @@ def norm(s):
 
 
 def haystack(r):
-    return norm(" ".join(str(r.get(k) or "") for k in
-                         ("atm_id", "title", "desc", "agency", "cat", "cat_title",
-                          "atm_type", "location")))
+    hay = " ".join(str(r.get(k) or "") for k in
+                   ("atm_id", "title", "desc", "agency", "cat", "cat_title",
+                    "atm_type", "location"))
+    # A watch on "ndia" never matched the agency, which writes itself out in
+    # full on every notice. The initials are derived the same way the site
+    # derives them, so both answer the acronym a reader would actually type.
+    return norm(hay + " " + acronym(r.get("agency")))
+
+
+ACRONYM_STOP = {"of", "and", "the", "for", "to", "in", "a", "an", "on"}
+
+
+def acronym(name):
+    sig = [w for w in re.findall(r"[a-z0-9]+", str(name or "").lower())
+           if w not in ACRONYM_STOP]
+    if len(sig) < 3:
+        return ""
+    a = "".join(w[0] for w in sig)
+    return a if 3 <= len(a) <= 6 else ""
 
 
 # Terms are matched on word boundaries, not as bare substrings. "ndia" inside

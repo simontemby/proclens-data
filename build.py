@@ -503,12 +503,29 @@ def month_of(rec):
 # ---------------------------------------------------------------- search terms
 
 TOKEN_RE = re.compile(r"[a-z0-9]+")
+ACRONYM_STOP = {"of", "and", "the", "for", "to", "in", "a", "an", "on"}
+
+
+def acronym(name):
+    """The initials of an agency's name, derived rather than listed so no agency
+    has to be remembered by hand. Three significant words minimum, or "Services
+    Australia" would become "sa"."""
+    sig = [w for w in TOKEN_RE.findall(str(name or "").lower()) if w not in ACRONYM_STOP]
+    if len(sig) < 3:
+        return ""
+    a = "".join(w[0] for w in sig)
+    return a if 3 <= len(a) <= 6 else ""
 
 
 def tokens(rec):
     """Must match tokenize() in index.html exactly, or a search would skip a
     month that holds a match."""
     text = " ".join(str(rec.get(k) or "") for k in ("title", "buyer", "supplier", "abn", "cn", "vendor"))
+    # Agencies are written out in full and never by the name everyone uses:
+    # every National Disability Insurance Agency record says exactly that, so a
+    # search for NDIA matched nothing at all. Must stay identical to acronym()
+    # in index.html, which decides whether a row that the index led to is shown.
+    text += " " + acronym(rec.get("buyer"))
     out = set()
     for t in TOKEN_RE.findall(text.lower()):
         if len(t) < 2 or len(t) > 40:

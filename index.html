@@ -748,7 +748,19 @@ function parseQuery(raw){
   return {raw:q, words, phrase:m?(m[1].toLowerCase().match(/[a-z0-9]+/g)||[]).join(" "):"",
           isPrefix:w=>prefixLast&&w===words[words.length-1]};
 }
-const rowText=r=>`${r.title||""} ${r.buyer||""} ${r.supplier||""} ${r.abn||""} ${r.cn||""} ${r.vendor||""}`;
+// Agencies are written out in full and never by the name everyone uses for
+// them: all 486 National Disability Insurance Agency notices say exactly that,
+// so a search for NDIA found none of them. The initials are derived rather than
+// listed, so no agency has to be remembered by hand. Three significant words
+// minimum — "Services Australia" would otherwise become "sa".
+const ACRONYM_STOP=new Set(["of","and","the","for","to","in","a","an","on"]);
+function acronym(name){
+  const sig=(String(name||"").toLowerCase().match(/[a-z0-9]+/g)||[]).filter(w=>!ACRONYM_STOP.has(w));
+  if(sig.length<3) return "";
+  const a=sig.map(w=>w[0]).join("");
+  return a.length>=3&&a.length<=6?a:"";
+}
+const rowText=r=>`${r.title||""} ${r.buyer||""} ${acronym(r.buyer)} ${r.supplier||""} ${r.abn||""} ${r.cn||""} ${r.vendor||""}`;
 function matches(r,qq){
   if(!qq||!qq.words.length) return true;
   if(r._t===undefined) r._t=" "+tokenize(rowText(r)).join(" ")+" ";
@@ -1163,16 +1175,25 @@ function daysTo(d){
   const today=Date.parse(new Date().toISOString().slice(0,10)+"T00:00:00Z");
   return Math.round((t-today)/86400000);
 }
+// Whole words, like the contracts search and the watchlist, with only the word
+// still being typed matching as a prefix. This tab matched bare substrings, so
+// a search for NDIA returned a Department of Foreign Affairs notice about India
+// and none of the agency's own.
+function noticeMatch(r,qq){
+  if(!qq||!qq.words.length) return true;
+  if(r._h===undefined)
+    r._h=" "+(((r.title||"")+" "+(r.atm_id||"")+" "+(r.agency||"")+" "+acronym(r.agency)+" "+
+              (r.cat||"")+" "+(r.cat_title||"")+" "+(r.desc||"")).toLowerCase()
+              .match(/[a-z0-9]+/g)||[]).join(" ")+" ";
+  for(const w of qq.words) if(r._h.indexOf(qq.isPrefix(w)?" "+w:" "+w+" ")<0) return false;
+  if(qq.phrase&&r._h.indexOf(" "+qq.phrase)<0) return false;
+  return true;
+}
 function applyAtm(){
   showResults(true);
-  const q=S.q, today=new Date().toISOString().slice(0,10);
+  const qq=S.q?(S.query||parseQuery(S.q)):null, today=new Date().toISOString().slice(0,10);
   S.atmView=(S.atmRows||[]).filter(r=>{
-    if(q){
-      if(r._h===undefined)
-        r._h=((r.title||"")+" "+(r.atm_id||"")+" "+(r.agency||"")+" "+
-              (r.cat||"")+" "+(r.cat_title||"")+" "+(r.desc||"")).toLowerCase();
-      if(!r._h.includes(q)) return false;
-    }
+    if(qq&&!noticeMatch(r,qq)) return false;
     if(S.nWatch&&!(r._w||[]).includes(S.nWatch)) return false;
     const d=daysTo(r.close);
     if(S.nStatus==="open"&&!r.open) return false;
