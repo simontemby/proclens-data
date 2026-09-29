@@ -375,6 +375,8 @@ def main():
     ap = argparse.ArgumentParser(description="Ingest AusTender approaches to market.")
     ap.add_argument("--out", default="data/atm")
     ap.add_argument("--watchlist", default="data/watchlist.json")
+    ap.add_argument("--buyict", default="data/buyict",
+                    help="BuyICT store to match against the same watchlist")
     # The Atom feed has to state its own absolute address, which is the one thing
     # here that knows where the site is hosted. Kept out of the code so moving
     # hosts is a variable, not an edit.
@@ -471,8 +473,22 @@ def main():
     # by default — a new rule should not replay years of history into the feed —
     # but after editing the watchlist you want to know what it would have caught.
     candidates = list(store) if args.rematch else dict.fromkeys(new_guids + enriched_guids)
+    # BuyICT is where Commonwealth ICT demand is actually published, and none of
+    # it reaches AusTender's feed. A watchlist that read only this feed would
+    # miss every panel request for quote, so the same watches run over that
+    # store too. Its rows are written in these fields for exactly this reason.
+    # Only what is open there is considered: the BuyICT listing carries closed
+    # opportunities as well, and a feed of things nobody can bid on is noise.
+    buyict = {g: r for g, r in load_store(args.buyict).items() if r.get("open")} \
+        if os.path.isdir(args.buyict) else {}
+    if buyict:
+        print(f"  {len(buyict):,} open BuyICT opportunities also checked", file=sys.stderr)
+        candidates = list(dict.fromkeys(list(candidates) + list(buyict)))
+    # Matched from a pool, never a merged store: the shards, the totals and the
+    # capture date below all describe AusTender's notices alone.
+    pool = dict(store, **buyict)
     for guid in candidates:
-        r = store[guid]
+        r = pool[guid]
         hay = haystack(r)
         for w in watches:
             name = w.get("name") or "watch"

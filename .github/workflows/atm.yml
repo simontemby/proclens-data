@@ -1,7 +1,9 @@
 name: Approaches to market
 
 # AusTender publishes the current ATM list as 75 RSS items and keeps no archive,
-# so a notice that opens and closes between two polls is lost for good.
+# so a notice that opens and closes between two polls is lost for good. The same
+# job captures BuyICT, the DTA's ICT platform, whose panel requests for quote
+# never appear on AusTender at all.
 #
 # Wednesday and Friday nights, Canberra time. Approaches usually stay open for
 # weeks, so twice a week catches almost everything — but the feed holds only 75
@@ -57,6 +59,14 @@ jobs:
       - run: pip install requests
         if: steps.guard.outputs.skip != 'true'
 
+      # BuyICT before AusTender, so the watchlist runs over both in one pass and
+      # one commit. None of this reaches AusTender's feed: it is where the
+      # Commonwealth's ICT demand is actually published.
+      - name: Capture BuyICT opportunities
+        if: steps.guard.outputs.skip != 'true'
+        continue-on-error: true
+        run: python buyict.py --out data/buyict
+
       - name: Poll the notice feed
         if: steps.guard.outputs.skip != 'true'
         # Set the PROCLENS_SITE repository variable when the site moves hosts;
@@ -77,11 +87,11 @@ jobs:
           if grep -rlq '^<<<<<<< ' data 2>/dev/null; then
             echo 'refusing to commit: conflict markers in data/' >&2; exit 1
           fi
-          git add data/atm
+          git add data/atm data/buyict
           # index.json alone changes on every poll because it carries a
           # timestamp. Committing that three times a day for no news is noise,
           # so a run with nothing but the clock to report says nothing.
-          if git diff --staged --name-only | grep -qv '^data/atm/index.json$'; then
+          if git diff --staged --name-only | grep -qvE '^data/(atm|buyict)/index\.json$'; then
             git commit -m "Approaches to market $(date -u +%F)"
             git push
           else

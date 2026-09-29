@@ -160,6 +160,36 @@ Each notice is enriched once from its own page, which publishes three fields the
 API does not expose anywhere: **panel arrangement**, **multi-agency access** and
 **multi-stage**.
 
+### BuyICT
+
+AusTender publishes approaches to market. It does not publish what happens inside a panel,
+and that is where Commonwealth ICT work actually goes. **BuyICT**, the Digital Transformation
+Agency's ICT platform, carries the requests for quote and requests for information that
+agencies put to panel sellers — **6,676 of them since the platform opened in May 2022**, and
+not one appears on AusTender. The contract that results is reported to AusTender afterwards,
+so the money becomes visible; the demand never does.
+
+| | |
+|---|---|
+| ICT labour hire | 4,695 |
+| Professional and consulting services | 1,739 |
+| Requests for information | 242 |
+
+There is no open data for this. Nothing for BuyICT appears on data.gov.au and the platform
+has no documented API, so `buyict.py` asks the platform's own public widgets the same
+questions a browser asks, in the same order: the page for a session token, the filter widget
+for the query scaffolding, the list widget for records, paged. The records arrive as JSON —
+nothing is scraped out of HTML — and are written in the same fields as the approaches to
+market, so the same shard loader, the same watchlist and the same Atom feed carry them.
+
+The platform counts 9,781 rows and shows 6,676 to a visitor who is not signed in. That
+difference is recorded in `data/buyict/index.json` rather than hidden: **3,105 opportunities
+exist that the public cannot see**, and this archive does not pretend otherwise.
+
+Kept permanently, because a closed opportunity leaves the platform's listing. Closing is read
+from the record itself, not inferred from its disappearance — unlike AusTender's feed, this
+listing carries closed opportunities too.
+
 ### Alerts
 
 `data/watchlist.json` holds the watches. Each fires only for notices first seen after

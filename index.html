@@ -531,10 +531,13 @@ html{touch-action:manipulation}
   AusTender under the Commonwealth Procurement Rules. Source data is
   <a href="https://api.tenders.gov.au/ocds/" rel="noopener">Department of Finance open data</a>
   (CC BY 3.0 AU). Values are committed at award, not amounts actually paid.</p>
-  <p>Approaches to market come from AusTender's current-notice feed and are
+  <p>Approaches to market come from AusTender's current-notice feed, and opportunities
+  marked <span class="flag">BuyICT</span> from the Digital Transformation Agency's
+  <a href="https://www.buyict.gov.au/public?id=opportunities" rel="noopener">ICT platform</a>,
+  which publishes nothing to AusTender. Both are
   <a href="./data/atm/alerts.xml" rel="noopener">available as an Atom feed</a> filtered by
   <a href="./data/watchlist.json" rel="noopener">a watchlist</a>.
-  An approach is not an award.</p>
+  An approach is not an award, and a BuyICT request is usually open only to invited sellers.</p>
   <p id="prov">—</p>
 </footer>
 
@@ -559,7 +562,7 @@ const DATA="./data/";
 const S={cidx:null,monthIx:null,months:new Map(),detail:new Map(),terms:new Map(),upd:null,updDetail:null,
   rows:[],view:[],sup:[],supView:[],page:0,sPage:0,PER:100,query:null,qRaw:"",searched:null,
   q:"",agency:"",sort:"pub",flags:new Set(),d1:"",d2:"",v1:null,v2:null,tab:"c",
-  atm:new Map(),atmRows:[],atmView:[],alerts:[],nPage:0,nStatus:"open",nWatch:"",nDesc:false};
+  atm:new Map(),bi:new Map(),biIdx:undefined,atmRows:[],atmView:[],alerts:[],nPage:0,nStatus:"open",nWatch:"",nDesc:false};
 const $=s=>document.querySelector(s);
 const money=n=>n==null?"—":"$"+Math.round(n).toLocaleString("en-AU");
 function catLabel(c){
@@ -1050,7 +1053,14 @@ function wire(){
   // handlers that would be thrown away with the markup that carried them.
   $("#alertbar").addEventListener("click",e=>{
     const st=e.target.closest("[data-ns]"), w=e.target.closest("[data-nw]");
-    if(st){ S.nStatus=st.dataset.ns; applyAtm(); }
+    if(st){
+      S.nStatus=st.dataset.ns;
+      applyAtm();
+      // The earlier BuyICT years hold nothing that is still open, so they are
+      // only worth fetching once a reader looks past what is.
+      if(S.nStatus!=="open"&&S.nStatus!=="soon"&&S.biIdx)
+        loadBuyict((S.biIdx.shards||[]).map(x=>x.year).filter(y=>y!=="unknown"));
+    }
     else if(w){ S.nWatch=(S.nWatch===w.dataset.nw)?"":w.dataset.nw; applyAtm(); }
   });
   document.querySelectorAll("th button[data-sn]").forEach(b=>{
@@ -1095,17 +1105,41 @@ async function loadAtm(){
     const r=await fetch(DATA+"atm/alerts.json",{cache:"no-cache"});
     if(r.ok){ S.alerts=(await r.json()).alerts||[]; }
   }catch(e){}
-  if(!S.atmIdx){ rebuildAtm(); return; }
-  const years=(S.atmIdx.shards||[]).map(x=>x.year).filter(y=>y!=="unknown");
-  await loadShards({need:years, store:S.atm, noun:"notice years", after:rebuildAtm,
+  // BuyICT is a second source of the same kind of thing: what an agency wants
+  // bought, before anyone has won it. It is not AusTender and is never mixed
+  // into AusTender's own counts, but a reader looking for open work wants both
+  // in one place, so both load into this tab.
+  try{
+    const r=await fetch(DATA+"buyict/index.json",{cache:"no-cache"});
+    if(r.ok) S.biIdx=await r.json();
+  }catch(e){}
+  if(!S.atmIdx&&!S.biIdx){ rebuildAtm(); return; }
+  const years=(S.atmIdx?.shards||[]).map(x=>x.year).filter(y=>y!=="unknown");
+  // Only the years that can still hold an open opportunity are fetched now.
+  // BuyICT's closed history is 2.8MB and the tab opens on "open", so the rest
+  // waits until a reader actually asks for closed ones.
+  const thisYear=String(new Date().getFullYear());
+  const biAll=(S.biIdx?.shards||[]).map(x=>x.year).filter(y=>y!=="unknown");
+  const biYears=biAll.filter(y=>y>=String(Number(thisYear)-1));
+  await Promise.all([
+    years.length?loadShards({need:years, store:S.atm, noun:"notice years", after:rebuildAtm,
+      url:y=>{
+        const sh=(S.atmIdx.shards||[]).find(x=>x.year===y);
+        return `${DATA}atm/atm-${y}.json?v=${encodeURIComponent(stamp(sh))}`;
+      }}):null,
+    biYears.length?loadBuyict(biYears):null]);
+}
+function loadBuyict(years){
+  return loadShards({need:years, store:S.bi, noun:"BuyICT years", after:rebuildAtm,
     url:y=>{
-      const sh=(S.atmIdx.shards||[]).find(x=>x.year===y);
-      return `${DATA}atm/atm-${y}.json?v=${encodeURIComponent(stamp(sh))}`;
+      const sh=(S.biIdx.shards||[]).find(x=>x.year===y);
+      return `${DATA}buyict/buyict-${y}.json?v=${encodeURIComponent(stamp(sh))}`;
     }});
 }
 function rebuildAtm(){
   S.atmRows=[];
   for(const [,rs] of S.atm) if(rs) S.atmRows=S.atmRows.concat(rs);
+  for(const [,rs] of (S.bi||new Map())) if(rs) S.atmRows=S.atmRows.concat(rs);
   // A notice matched by a watch carries the watch name, so the alert strip can
   // filter to it without a second pass over the alert list on every keystroke.
   const byGuid=new Map();
@@ -1116,7 +1150,10 @@ function rebuildAtm(){
   for(const r of S.atmRows) r._w=byGuid.get(r.guid)||[];
   if(S.tab==="n") applyAtm();
 }
-function atmUrl(r){ return `https://www.tenders.gov.au/${r.kind||"Atm"}/Show/${r.guid}`; }
+function atmUrl(r){
+  if(r.kind==="BuyICT") return r.detail||"https://www.buyict.gov.au/public?id=opportunities";
+  return `https://www.tenders.gov.au/${r.kind||"Atm"}/Show/${r.guid}`;
+}
 // Whole calendar days, not elapsed hours. Measuring from the current instant to
 // the end of the closing day made a notice closing tomorrow read "in 2 days".
 function daysTo(d){
@@ -1199,7 +1236,8 @@ function drawAtm(){
     return `<tr>
     <td class="t-title"><a class="linkbtn" href="${esc(atmUrl(r))}" rel="noopener"
         target="_blank">${esc(r.title||"(untitled)")}</a>
-      <div class="t-sub">${esc(r.atm_id||"")}${r.kind==="Advert"?" · advert":""}</div></td>
+      <div class="t-sub">${esc(r.atm_id||"")}${r.kind==="Advert"?" · advert":""}${
+        r.kind==="BuyICT"?' · <span class="flag" title="Published on BuyICT, the Digital Transformation Agency\'s ICT platform — a panel request, not an open approach to market">BuyICT</span>':""}</div></td>
     <td class="t-party" data-th="Agency">${esc(r.agency||"—")}</td>
     <td class="t-party hide-m" data-th="Category">${esc(r.cat_title||r.cat||"—")}</td>
     <td class="hide-m" data-th="Type">${esc(r.atm_type||"—")}</td>
