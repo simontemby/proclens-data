@@ -1,0 +1,72 @@
+name: NSW contract awards
+
+# NSW cannot be polled. buy.nsw sits behind an AWS WAF that answers any client
+# which is not a browser with "x-amzn-waf-action: challenge" and a JavaScript
+# puzzle; defeating that is bot-detection bypass, and this archive does not do
+# it. There is no open-data copy either: data.nsw carries council registers and
+# media releases, and reporting.buy.nsw.gov.au is agency login only.
+#
+# What the platform does offer is its own bulk export, public and without a
+# sign-in: buy.nsw.gov.au/notices/notice-reports, filtered by notice type,
+# agency, category and publish date, with an Export CSV button. A person runs
+# that and puts the file in data/nsw/raw/. Everything after that is automatic —
+# this parses whatever is there the moment it arrives.
+on:
+  push:
+    paths:
+      - "data/nsw/raw/**"
+      - "nsw.py"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: archive-write
+  cancel-in-progress: false
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    if: github.actor != 'legal-tender-bot'
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: pip install requests
+
+      - name: Parse the exports
+        run: python nsw.py --raw data/nsw/raw --out data/nsw/contracts.json
+
+      - name: Say how fresh it is
+        run: |
+          python - <<'PY' >> $GITHUB_STEP_SUMMARY
+          import json, datetime
+          d = json.load(open("data/nsw/contracts.json"))
+          pub = [c["published"] for c in d["contracts"] if c.get("published")]
+          latest = max(pub) if pub else "none"
+          days = (datetime.date.today() - datetime.date.fromisoformat(latest)).days if pub else None
+          print(f"**{d['totals']['contracts']:,} NSW contract awards**, newest published {latest}"
+                + (f" — {days} days ago." if days is not None else "."))
+          if days is not None and days > 45:
+              print(f"\n> The register has moved on since this export. Take a fresh one from "
+                    f"https://buy.nsw.gov.au/notices/notice-reports and add it to `data/nsw/raw/`.")
+          PY
+
+      - name: Commit
+        run: |
+          git config user.name "legal-tender-bot"
+          git config user.email "legal-tender-bot@users.noreply.github.com"
+          git pull --rebase --autostash origin main || { git rebase --abort 2>/dev/null || true; }
+          if grep -rlq '^<<<<<<< ' data 2>/dev/null; then
+            echo 'refusing to commit: conflict markers in data/' >&2; exit 1
+          fi
+          git add data/nsw
+          if ! git diff --staged --quiet; then
+            git commit -m "NSW contract awards $(date -u +%F)"
+            git push origin main
+          else
+            echo "nothing new"
+          fi
