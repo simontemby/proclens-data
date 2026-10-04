@@ -258,6 +258,11 @@ def main():
         "source": SOURCE,
         "totals": {"contracts": len(rows), "new_this_run": len(rows) - before,
                    "distinct_notice_ids": len({r.get("id") for r in rows}),
+                   # How current the exports are. The platform cannot be polled,
+                   # so this is the only thing that says whether the store has
+                   # fallen behind the register.
+                   "newest_published": max((r["published"] for r in rows if r.get("published")),
+                                           default=None),
                    "rows_read": seen, "older_rows_ignored": superseded,
                    "with_an_abn": with_abn,
                    "by_kind": dict(Counter(r.get("kind") for r in rows).most_common()),

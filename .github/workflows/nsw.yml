@@ -45,14 +45,19 @@ jobs:
           python - <<'PY' >> $GITHUB_STEP_SUMMARY
           import json, datetime
           d = json.load(open("data/nsw/index.json"))
-          latest = max((sh["year"] for sh in d.get("shards", []) if sh["year"].isdigit()), default="")
-          latest = f"{latest}-12-31" if latest else "none"
-          days = (datetime.date.today() - datetime.date.fromisoformat(latest)).days if pub else None
-          print(f"**{d['totals']['contracts']:,} NSW contract awards**, newest published {latest}"
-                + (f" — {days} days ago." if days is not None else "."))
-          if days is not None and days > 45:
-              print(f"\n> The register has moved on since this export. Take a fresh one from "
-                    f"https://buy.nsw.gov.au/notices/notice-reports and add it to `data/nsw/raw/`.")
+          t = d["totals"]
+          latest = t.get("newest_published")
+          kinds = ", ".join(f"{n:,} {k.lower()}s" for k, n in (t.get("by_kind") or {}).items())
+          line = f"**{t['contracts']:,} NSW notices** ({kinds})."
+          if latest:
+              days = (datetime.date.today() - datetime.date.fromisoformat(latest)).days
+              line += f" Newest published {latest} — {days} days ago."
+              if days > 45:
+                  line += ("\n\n> The register has moved on since these exports. Take a fresh one "
+                           "from https://buy.nsw.gov.au/notices/notice-reports — notice type "
+                           "'Contract award', a publish date range, Export CSV — and add it to "
+                           "`data/nsw/raw/` as `can-<range>.csv`.")
+          print(line)
           PY
 
       - name: Commit
