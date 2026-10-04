@@ -110,6 +110,13 @@ button:hover,select:hover{background:var(--tint)}
 .grp label{font:700 11px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink)}
 .grp input[type=date]{border:none;padding:3px;background:transparent;min-width:118px;color:var(--ink)}
 .grp input[type=number]{border:none;padding:3px;background:transparent;width:96px;font-family:var(--mono);text-align:right;color:var(--ink)}
+/* display:flex on .chiprow beats the hidden attribute's display:none, so the
+   review-flag chips kept showing on a state register that has no flags. */
+.chiprow[hidden]{display:none}
+.jurrow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:6px 0 2px}
+.jurrow .chip .jn{opacity:.7;font-variant-numeric:tabular-nums;margin-left:5px}
+.jurnote{font-size:12px;line-height:1.45;opacity:.85;max-width:60ch}
+.flag.jur{background:var(--ink);color:var(--paper);border-color:var(--ink)}
 .chiprow{display:flex;gap:7px;flex-wrap:wrap}
 .chip{font:700 12px var(--mono);padding:6px 10px;border-radius:var(--r);border:2px solid var(--ink);
   background:transparent;color:var(--ink);cursor:pointer}
@@ -187,7 +194,7 @@ body.landing .tools{padding-bottom:12px}
    at 132px ran four lines deep and pushed everything past the fold. */
 .hero{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:clamp(24px,5vw,72px);
   align-items:center;margin:clamp(20px,5svh,56px) 0 clamp(20px,5svh,56px)}
-.hero h2{margin:0 0 clamp(12px,2.2svh,22px);font:900 clamp(40px,min(6.4vw,10.5svh),112px)/.86 var(--disp);
+.hero h2{margin:0 0 clamp(10px,1.8svh,18px);font:900 clamp(34px,min(5.4vw,8.6svh),96px)/.88 var(--disp);
   text-transform:uppercase;letter-spacing:.005em;color:var(--ink);max-width:12ch;text-wrap:balance;
   text-shadow:.04em .03em 0 var(--pink)}
 .herosub{margin:0 0 clamp(14px,2.4svh,24px);font:700 clamp(14px,1.9svh,17px)/1.45 var(--mono);color:var(--ink);max-width:48ch}
@@ -365,7 +372,7 @@ html{touch-action:manipulation}
 <header>
   <div class="wrap head">
     <h1>Legal Tender<span class="co">.</span></h1>
-    <p class="tag hide-s">Where the Commonwealth's money actually goes.</p>
+    <p class="tag hide-s">Where Australian governments' money actually goes.</p>
     <span class="sp"></span>
     <div class="tabs" role="tablist">
       <button class="tab" role="tab" id="tab-c" aria-selected="true">Contracts</button>
@@ -390,6 +397,7 @@ html{touch-action:manipulation}
       <button class="iconbtn" id="filterBtn" aria-haspopup="dialog">Filters
         <span class="badge" id="filterCount" hidden>0</span></button>
     </div>
+    <div class="chiprow jurrow" id="jurrow" role="group" aria-label="Jurisdiction"></div>
     <p class="count" id="count" role="status" aria-live="polite">Loading archive…</p>
     <p class="count" id="bgstat" aria-live="polite" style="padding-top:2px"></p>
     <progress id="prog" max="100" value="0" hidden></progress>
@@ -438,10 +446,10 @@ html{touch-action:manipulation}
 <section class="wrap" id="landing">
   <div class="hero">
     <div class="hero-main">
-      <h2>Search every Commonwealth contract</h2>
-      <p class="herosub">Every Australian Government contract notice since 2014, each
-        amendment, the Senate Order snapshots and the NDIA's own listings — one record
-        per contract.</p>
+      <h2>Search Commonwealth, NSW and Victorian contracts</h2>
+      <p class="herosub">Commonwealth contract notices since 2014 with every amendment,
+        plus the NSW and Victorian registers — which publish nothing to AusTender. Three
+        registers, counted separately and never added together.</p>
       <p class="herohint">Type a supplier, agency, ABN or CN above.</p>
     </div>
     <dl class="hero-stats" id="heroStats" aria-label="What the archive holds"></dl>
@@ -559,9 +567,27 @@ const FLAGS={
   consultancy:"Reported as a consultancy"
 };
 const DATA="./data/";
+/* Three registers, not one archive. They answer different questions and were
+   written under different rules: the Commonwealth reports from $10,000 and names
+   every supplier; NSW publishes awards over $150,000 under the GIPA Act, names
+   the contractor and its ABN, and includes councils; Victoria publishes over
+   $100,000 and names no supplier at all — those sit on pages its robots.txt asks
+   crawlers not to fetch. Their totals are never added together, because a sum of
+   three different thresholds over three different periods describes nothing. */
+const JURISDICTIONS={
+  cth:{label:"Commonwealth", short:"Commonwealth", dir:null},
+  nsw:{label:"New South Wales", short:"NSW", dir:"nsw", prefix:"nsw",
+       note:"Contract awards and standing offers from the buy.nsw register, including "+
+            "councils. Published above $150,000 under the GIPA Act."},
+  vic:{label:"Victoria", short:"Victoria", dir:"vic", prefix:"vic",
+       note:"The Victorian contract publishing system. <b>No supplier names</b>: they "+
+            "appear only on pages the platform's robots.txt asks crawlers not to fetch, "+
+            "so this archive does not take them."}
+};
 const S={cidx:null,monthIx:null,months:new Map(),detail:new Map(),terms:new Map(),upd:null,updDetail:null,
   rows:[],view:[],sup:[],supView:[],page:0,sPage:0,PER:100,query:null,qRaw:"",searched:null,
   q:"",agency:"",sort:"pub",flags:new Set(),d1:"",d2:"",v1:null,v2:null,tab:"c",
+  jur:"cth",state:{nsw:new Map(),vic:new Map()},stateIdx:{},
   atm:new Map(),bi:new Map(),biIdx:undefined,atmRows:[],atmView:[],alerts:[],nPage:0,nStatus:"open",nWatch:"",nDesc:false};
 const $=s=>document.querySelector(s);
 const money=n=>n==null?"—":"$"+Math.round(n).toLocaleString("en-AU");
@@ -695,7 +721,53 @@ async function ensureMonths(months){
   await loadUpdates();
   await loadShards({need:months, url:listUrl, store:S.months, noun:"months"});
 }
+/* A state row is mapped onto the same field names a Commonwealth row uses, so
+   the table, the search, the agency filter and the date and value filters all
+   work on it without knowing where it came from. What a state does not have
+   stays empty rather than being invented: Victoria has no supplier and no
+   publication date, and says so. */
+function stateRow(jur,r){
+  const o=(jur==="nsw")
+    ? {cn:r.id, title:r.title, buyer:r.agency, supplier:r.supplier, abn:r.abn,
+       value:r.value, pub:r.published, start:r.start, end:r.end,
+       kind:r.kind, url:r.url, category:r.category, scope:r.scope, status:r.status}
+    : {cn:r.code, title:r.title, buyer:r.buyer, supplier:null, abn:null,
+       value:r.value, pub:null, start:r.start, end:r.expiry,
+       kind:"Contract", url:r.url, status:r.status};
+  o._jur=jur; o._f=[]; o.value_first=o.value; o._g=0;
+  return o;
+}
+async function ensureState(jur,years){
+  const cfg=JURISDICTIONS[jur];
+  if(!S.stateIdx[jur]){
+    try{
+      const r=await fetch(`${DATA}${cfg.dir}/index.json`,{cache:"no-cache"});
+      S.stateIdx[jur]=r.ok?await r.json():null;
+    }catch(e){ S.stateIdx[jur]=null; }
+  }
+  const idx=S.stateIdx[jur];
+  if(!idx) return;
+  const all=(idx.shards||[]).map(x=>x.year);
+  const need=(years&&years.length?all.filter(y=>years.includes(y)||!/^\d{4}$/.test(y)):all);
+  await loadShards({need, store:S.state[jur], noun:`${cfg.short} years`, after:rebuild,
+    url:y=>{
+      const sh=(idx.shards||[]).find(x=>x.year===y);
+      return `${DATA}${cfg.dir}/${cfg.prefix}-${y}.json?v=${encodeURIComponent(stamp(sh))}`;
+    }});
+}
+function yearsInRange(d1,d2){
+  const a=Number((d1||"1999").slice(0,4)), b=Number((d2||"2030").slice(0,4));
+  const out=[]; for(let y=a;y<=b;y++) out.push(String(y));
+  return out;
+}
 function rebuild(){
+  if(S.jur!=="cth"){
+    const out=[];
+    for(const [,rs] of S.state[S.jur]) if(rs) for(const r of rs) out.push(r._jur?r:stateRow(S.jur,r));
+    S.rows=out;
+    apply();
+    return;
+  }
   const out=[];
   for(const [m,rs] of S.months){
     if(!rs) continue;
@@ -812,6 +884,15 @@ async function runSearch(){
   const seq=++searchSeq;
   S.query=parseQuery(S.qRaw);
   if(!S.query.words.length){ S.searched=null; return reapply(); }
+  // The month index and its term files describe the Commonwealth corpus. A
+  // state register is small enough to hold whole and is searched in memory, so
+  // searching one must not send the reader off to fetch 256 Commonwealth months.
+  if(S.jur!=="cth"){
+    S.searched=null;
+    await ensureState(S.jur);
+    if(seq===searchSeq) reapply();
+    return;
+  }
   let months=await monthsForQuery(S.query);
   if(seq!==searchSeq) return;
   const narrowed=months!==null;
@@ -836,6 +917,14 @@ async function boot(){
   }
   S.cidx=idx;
   S.monthIx=new Map(idx.months.map(m=>[m.month,m]));
+  // The state indexes are a few kilobytes each and carry the totals the landing
+  // prints. The shards themselves are only fetched if a reader asks for them.
+  await Promise.all(Object.entries(JURISDICTIONS).filter(([,j])=>j.dir).map(async([k,j])=>{
+    try{
+      const r=await fetch(`${DATA}${j.dir}/index.json`,{cache:"no-cache"});
+      if(r.ok) S.stateIdx[k]=await r.json();
+    }catch(e){}
+  }));
   const t=idx.totals||{};
   const dated=idx.months.map(m=>m.month).filter(m=>m!=="unknown").sort();
   const today=todayISO();
@@ -850,7 +939,14 @@ async function boot(){
   $("#scopenote").innerHTML=`<b>${(t.contracts||0).toLocaleString()} contracts</b>, `+
     `${money(t.value_aud)} committed, each appearing once however many sources publish it. `+
     `Coverage is complete from January 2014${years.length?` (${years.map(([y,n])=>`${y}: ${n.toLocaleString()}`).join(", ")})`:""}. `+
-    `Showing the most recent three months; a search reaches the whole archive.`;
+    `Showing the most recent three months; a search reaches the whole archive.`+
+    Object.entries(JURISDICTIONS).filter(([k])=>k!=="cth").map(([k,j])=>{
+      const st=jurStats(k);
+      return st?`<br><br><b>${esc(j.label)}: ${st.n.toLocaleString()} contracts</b>, `+
+        `${money(st.v)}. ${j.note} Published to the state's own register, not to AusTender, `+
+        `and counted separately — three registers written under three different rules do not `+
+        `add up to a number that means anything.`:"";
+    }).join("");
   $("#truthnote").innerHTML=`<b>What this archive can and cannot show.</b> Values are committed at `+
     `award, not amounts paid. Each contract's first value, amendment dates and amended values come `+
     `from AusTender's own release history. The reason for an amendment, confidentiality, `+
@@ -866,13 +962,16 @@ async function boot(){
   // hold a single contract dated 1999.
   const yrs=Object.entries(t.by_year||{}).filter(([y,n])=>/^\d{4}$/.test(y)&&n>=10000).map(([y])=>y).sort();
   const compact=v=>v>=1e12?`$${(v/1e12).toFixed(2)} trillion`:v>=1e9?`$${(v/1e9).toFixed(1)} billion`:money(v);
-  $("#heroStats").innerHTML=
-    `<div><dt>Contracts</dt><dd>${(t.contracts||0).toLocaleString()}<small>each counted once</small></dd></div>`+
-    `<div><dt>Committed</dt><dd>${compact(t.value_aud||0).replace(" trillion","T").replace(" billion","B")}`+
-      `<small>${esc(compact(t.value_aud||0))}${(t.contradicted||{}).contracts
-        ? ` · ${compact(t.contradicted.value_aud).replace(" trillion","T").replace(" billion","B")} disputed`:""}</small></dd></div>`+
-    `<div><dt>Complete from</dt><dd>2014<small>partial back to ${esc(yrs[0]||"")}</small></dd></div>`;
-  buildAgencies(); buildChips(); wire();
+  $("#heroStats").innerHTML=Object.entries(JURISDICTIONS).map(([k,j])=>{
+    const st=jurStats(k);
+    if(!st) return "";
+    return `<div><dt>${esc(j.short)}</dt><dd>${st.n.toLocaleString()}`+
+      `<small>${esc(compact(st.v).replace(" trillion","T").replace(" billion","B"))}`+
+      `${k==="cth"&&(t.contradicted||{}).contracts
+        ? " · "+esc(compact(t.contradicted.value_aud).replace(" trillion","T").replace(" billion","B"))+" disputed":""}`+
+      `</small></dd></div>`;
+  }).join("");
+  buildAgencies(); buildChips(); buildJur(); wire();
   await ensureMonths(monthsFor(S.d1,S.d2));
   // No automatic full download. When search needed the whole archive in memory
   // it made sense to start fetching it on load; now a search fetches only the
@@ -945,6 +1044,42 @@ function buildAgencies(){
     o.value=n; o.textContent=`${n} (${k.toLocaleString()})`; sel.append(o);
   }
   sel.value=keep;
+}
+/* The jurisdiction row sits above the results rather than inside the filter
+   sheet, because it does not narrow a result set — it changes which register you
+   are reading, and the registers do not mean the same thing. */
+function jurStats(k){
+  if(k==="cth"){
+    const t=(S.cidx&&S.cidx.totals)||{};
+    return {n:t.contracts||0, v:t.value_aud||0};
+  }
+  const t=(S.stateIdx[k]&&S.stateIdx[k].totals)||null;
+  return t?{n:t.contracts||0, v:t.value_aud||0}:null;
+}
+function buildJur(){
+  const el=$("#jurrow"); if(!el) return;
+  el.innerHTML=Object.entries(JURISDICTIONS).map(([k,j])=>{
+    const st=jurStats(k);
+    return `<button class="chip${S.jur===k?" on":""}" data-jur="${k}" aria-pressed="${S.jur===k}">`+
+      `${esc(j.short)}${st?` <span class="jn">${st.n.toLocaleString()}</span>`:""}</button>`;
+  }).join("")+(S.jur==="cth"?"":
+    `<span class="jurnote">${JURISDICTIONS[S.jur].note}</span>`);
+  el.querySelectorAll("[data-jur]").forEach(b=>b.onclick=()=>selectJur(b.dataset.jur));
+}
+async function selectJur(k){
+  if(k===S.jur) return;
+  S.jur=k; S.page=0;
+  buildJur();
+  // Flags, value growth and the review filters describe Commonwealth notices.
+  // A state register carries none of them, so the chips go away rather than
+  // sitting there filtering to nothing.
+  const chips=$("#chips"); if(chips) chips.hidden=(k!=="cth");
+  if(k!=="cth"){
+    S.flags.clear();
+    await ensureState(k, S.dateTouched?yearsInRange(S.d1,S.d2):null);
+  }
+  rebuild();
+  buildAgencies();
 }
 function buildChips(){
   const n=$("#chips");
@@ -1371,7 +1506,10 @@ function draw(){
       r.vendor?`<span class="flag vend" title="${r.vconf==="stated"?"The description names the vendor":"Presumed from evidence — open the contract to see why and how reliable the rule is"}">${r.vconf==="stated"?"":esc(r.vconf)+" "}${esc(r.vendor)}</span>`:""}${
       r.amendments?`<span class="flag" title="Amended ${r.amendments} time${r.amendments===1?"":"s"} since publication">amended ×${r.amendments}</span>`:""}${
       /so13/.test(r.src||"")?'<span class="flag" title="Published under Senate Order 13 by an entity that does not report to AusTender">outside AusTender</span>':
-      (r.src==="historical"?'<span class="flag" title="Present only in the Department of Finance historical extracts">historical extract</span>':"")}</td>
+      (r.src==="historical"?'<span class="flag" title="Present only in the Department of Finance historical extracts">historical extract</span>':"")}${
+      r._jur?`<span class="flag jur" title="${esc(JURISDICTIONS[r._jur].label)} — published to the state's own register, not to AusTender">${esc(JURISDICTIONS[r._jur].short)}</span>`:""}${
+      r._jur==="vic"?'<span class="flag" title="The Victorian register does not publish supplier names on the pages this archive is permitted to read">no supplier published</span>':""}${
+      r.kind==="Standing offer"?'<span class="flag" title="A standing offer, not a contract award">standing offer</span>':""}</td>
   </tr>`;}).join(""));
   const left=S.view.length-(S.page+1)*S.PER;
   $("#more").innerHTML=left>0
@@ -1423,6 +1561,21 @@ function drawSup(){
 
 /* Everything beyond the table row lives in the month's detail file, fetched
    the first time a contract from that month is opened. */
+function stateDialog(r){
+  const j=JURISDICTIONS[r._jur];
+  const rows=[["Register",j.label],["Notice",r.cn],["Agency",r.buyer],
+    ["Supplier",r.supplier],["ABN",r.abn],["Value",r.value!=null?money(r.value):null],
+    ["Type",r.kind],["Category",r.category],["Scope",r.scope],["Status",r.status],
+    ["Published",fmtDMY(r.pub)],["Start",fmtDMY(r.start)],["End",fmtDMY(r.end)]];
+  let h=rows.filter(([,v])=>v!=null&&v!=="").map(([k,v])=>`<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("");
+  if(r._jur==="vic")
+    h+='<dt>Supplier</dt><dd>Not published here. The Victorian register names suppliers only on '+
+       'its own contract pages, which its robots.txt asks crawlers not to fetch, so this archive '+
+       'does not take them. The link below opens the page that has it.</dd>';
+  h+=`<dt>Source</dt><dd><a href="${esc(r.url||"#")}" target="_blank" rel="noopener">`+
+     `Open on the ${esc(j.short)} register</a></dd>`;
+  return h;
+}
 async function detailFor(r){
   if(S.updDetail&&S.updDetail.has(r.cn)) return S.updDetail.get(r.cn);
   let m=S.detail.get(r._m);
@@ -1446,6 +1599,9 @@ document.addEventListener("click",async e=>{
   $("#dlg-t").textContent=r.title||r.cn||"Contract";
   $("#dlg-b").innerHTML='<dd class="t-sub">Loading…</dd>';
   $("#dlg").showModal();
+  // A state notice carries everything it has in the row itself; there is no
+  // detail shard behind it, and nothing to wait for.
+  if(r._jur){ $("#dlg-b").innerHTML=stateDialog(r); return; }
   const d=await detailFor(r);
   const so13=/so13/.test(r.src||"");
   const loc=[d.supplier_city,d.supplier_postcode,d.supplier_country].filter(Boolean).join(" ");

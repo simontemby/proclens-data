@@ -47,6 +47,37 @@ holds. The weekly export and the notice feed are windows, not archives — AusTe
 deletes export files after eighteen months and keeps no history of notices — so both
 stores are permanent from first capture.
 
+## Three registers, not one archive
+
+The Commonwealth is the spine of this archive. Two states now sit beside it, and they are
+counted separately — a sum of three registers written under three different rules over
+three different periods is a number that describes nothing.
+
+| | Contracts | Suppliers named | Threshold | From |
+|---|---|---|---|---|
+| Commonwealth | 1,299,680 | yes, with ABN | $10,000 | 1999, complete from 2014 |
+| Victoria | 57,150 | **no** | $100,000 (VGPB) | 2003 |
+| New South Wales | 18,124 | yes, with ABN | $150,000 (GIPA) | 2006 |
+
+**Victoria** publishes no supplier names anywhere this archive is permitted to read. They
+sit on the platform's own contract pages, which its `robots.txt` asks crawlers not to
+fetch, so `vic.py` does not fetch them; each contract links to its page instead. The
+agency is recoverable without touching those pages, because the search accepts a buyer and
+the form lists all 573 of them. The register is also far larger than it admits: its open
+listing reports 2,308 records, and asking each buyer returns 57,150.
+
+**New South Wales** cannot be polled. Every request that is not a browser gets
+`x-amzn-waf-action: challenge` and a JavaScript puzzle, and there is no open-data copy.
+What the platform does offer is its own public bulk CSV export, so that is what this uses:
+a person runs it, the file goes in `data/nsw/raw/` named `can-*.csv` or `son-*.csv`, and
+the workflow ingests it. The export names the contractor and its ABN, which is why NSW is
+worth the manual step — **2,761 ABNs hold contracts in both the Commonwealth and NSW**,
+joined on identity rather than on a name match.
+
+The site carries all three behind a jurisdiction selector. Review flags, value growth and
+the vendor inference describe Commonwealth notices only, so they disappear on a state
+register rather than filtering to nothing.
+
 ## Search
 
 A search does not download the archive. `build.py` writes an index mapping every word to
