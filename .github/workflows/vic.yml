@@ -65,7 +65,7 @@ jobs:
           if [ "${{ inputs.full }}" = "true" ] || [ "${{ github.event.schedule }}" = "0 15 1 * *" ]; then
             full="--full"
           fi
-          python vic.py --out data/vic/contracts.json $full
+          python vic.py --out data/vic $full
 
       - name: Commit
         if: steps.guard.outputs.skip != 'true'
@@ -77,7 +77,7 @@ jobs:
             echo 'refusing to commit: conflict markers in data/' >&2; exit 1
           fi
           # The partial checkpoint is working state, not archive.
-          rm -f data/vic/contracts.json.partial
+          rm -f data/vic/collecting.partial
           git add data/vic
           if ! git diff --staged --quiet; then
             git commit -m "Victorian contracts $(date -u +%F)"

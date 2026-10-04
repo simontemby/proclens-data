@@ -47,6 +47,11 @@ import build
 DATA = os.environ.get("PROCLENS_DATA", "data")
 SITE = "https://www.tenders.vic.gov.au"
 SEARCH = SITE + "/contract/search"
+NOTE = ("Contracts published by Victorian government buyers on the state's contract publishing "
+        "system. Victoria is not the Commonwealth: these are counted separately and never added "
+        "to a Commonwealth total. Supplier names are NOT here. They appear only on the platform's "
+        "contract detail pages, which its robots.txt asks crawlers not to fetch, so this archive "
+        "does not fetch them; each contract carries the address of its own page instead.")
 UA = ("Mozilla/5.0 (compatible; legal-tender-archive/1.0; "
       "+https://simontemby.github.io/proclens-data/)")
 # One request every second and a half. At half a second the platform started
@@ -54,6 +59,46 @@ UA = ("Mozilla/5.0 (compatible; legal-tender-archive/1.0; "
 # the first minute and then nothing for six. This is a small state service, not
 # a CDN, and the whole job still finishes inside twenty minutes.
 PAUSE = 1.5
+
+# Written as one file per year, dictionary-coded, like every other store here.
+# A single 22MB JSON rewritten twice a week would add gigabytes to the history
+# in a year; a year shard only changes when that year does.
+FIELDS = ["key", "id", "code", "title", "status", "start", "expiry", "value",
+          "buyer", "buyer_id", "url", "first_seen", "last_seen"]
+DICT_FIELDS = ("status", "buyer", "buyer_id")
+
+
+def encode(rows):
+    dicts, lookup = {}, {}
+    for f in DICT_FIELDS:
+        vals, seen = [], {}
+        for r in rows:
+            v = r.get(f)
+            if v not in seen:
+                seen[v] = len(vals)
+                vals.append(v)
+        dicts[f], lookup[f] = vals, seen
+    return dicts, [[lookup[f][r.get(f)] if f in DICT_FIELDS else r.get(f)
+                    for f in FIELDS] for r in rows]
+
+
+def load_store(outdir):
+    """Every shard read back into one dict, keyed as the contracts are keyed."""
+    store = {}
+    idx = build.read_json(os.path.join(outdir, "index.json"), {})
+    for sh in idx.get("shards", []):
+        payload = build.read_json(os.path.join(outdir, sh["file"]), {})
+        f, d = payload.get("fields", FIELDS), payload.get("dict", {})
+        for row in payload.get("rows", []):
+            r = {}
+            for i, k in enumerate(f):
+                v = row[i] if i < len(row) else None
+                if k in d and isinstance(v, int):
+                    v = d[k][v]
+                r[k] = v
+            if r.get("key"):
+                store[r["key"]] = r
+    return store
 
 
 def session():
@@ -243,7 +288,7 @@ def collect(s, checkpoint=None, done=None, rows=None, known=None):
 
 def main():
     ap = argparse.ArgumentParser(description="Capture the Victorian contract register.")
-    ap.add_argument("--out", default=os.path.join(DATA, "vic", "contracts.json"))
+    ap.add_argument("--out", default=os.path.join(DATA, "vic"))
     ap.add_argument("--full", action="store_true",
                     help="sweep every page of every buyer, not just what is new. "
                          "A contract already held can change — its value amended, its "
@@ -254,7 +299,7 @@ def main():
     t0 = time.time()
     today = datetime.now(timezone.utc).date().isoformat()
     s = session()
-    part = args.out + ".partial"
+    part = os.path.join(args.out, "collecting.partial")
 
     def checkpoint(rows, done):
         os.makedirs(os.path.dirname(args.out), exist_ok=True)
@@ -269,20 +314,19 @@ def main():
     if resume:
         print(f"resuming with {len(resume):,} contracts and "
               f"{len(prior.get('buyers_done', [])):,} buyers already read", file=sys.stderr)
-    held = build.read_json(args.out, {}).get("contracts", [])
-    known = None if (args.full or not held) else {r["key"] for r in held}
+    held = load_store(args.out)
+    known = None if (args.full or not held) else set(held)
     if known:
         print(f"incremental: {len(known):,} contracts already held; stopping at the "
               f"first page of each buyer that holds nothing new", file=sys.stderr)
     rows = collect(s, checkpoint=None if args.dry_run else checkpoint,
                    done=prior.get("buyers_done"), rows=resume, known=known)
+    if not rows and not held:
+        sys.exit("vic: nothing returned and nothing held — refusing to write an empty store")
     if not rows:
-        sys.exit("vic: nothing returned — refusing to rewrite the store on nothing")
+        print("nothing new on the platform", file=sys.stderr)
 
-    existing = build.read_json(args.out, {})
-    store = {r["key"]: r for r in existing.get("contracts", [])}
-    if not rows and store:
-        print("nothing new", file=sys.stderr)
+    store = dict(held)
     new = 0
     for key, row in rows.items():
         row = dict(row, key=key, jurisdiction="Victoria")
@@ -295,27 +339,39 @@ def main():
 
     out = sorted(store.values(), key=lambda r: (r.get("start") or "", r.get("code") or ""), reverse=True)
     attributed = sum(1 for r in out if r.get("buyer"))
+    vals = [r["value"] for r in out if isinstance(r.get("value"), (int, float))]
+    totals = {"contracts": len(out), "new_this_run": new,
+              "with_an_agency": attributed,
+              "without_an_agency": len(out) - attributed,
+              "value_aud": round(sum(vals), 2),
+              "by_status": dict(Counter(r.get("status") for r in out).most_common()),
+              "by_year": dict(sorted(Counter((r.get("start") or "?")[:4] for r in out).items()))}
     payload = {
         "generated": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-        "note": "Contracts published by Victorian government buyers on the state's contract "
-                "publishing system. Victoria is not the Commonwealth: these are counted separately "
-                "and never added to a Commonwealth total. Supplier names are NOT here. They appear "
-                "only on the platform's contract detail pages, which its robots.txt asks crawlers "
-                "not to fetch, so this archive does not fetch them; each contract carries the "
-                "address of its own page instead.",
+        "note": NOTE,
         "source": SEARCH,
-        "totals": {"contracts": len(out), "new_this_run": new,
-                   "with_an_agency": attributed,
-                   "without_an_agency": len(out) - attributed,
-                   "by_status": dict(Counter(r.get("status") for r in out).most_common()),
-                   "by_year": dict(sorted(Counter((r.get("start") or "?")[:4] for r in out).items()))},
-        "contracts": out,
+        "fields": FIELDS,
+        "totals": totals,
     }
     if args.dry_run:
         print(json.dumps(payload["totals"], indent=1))
         return
-    os.makedirs(os.path.dirname(args.out), exist_ok=True)
-    build.write_json_if_changed(args.out, payload)
+    os.makedirs(args.out, exist_ok=True)
+    by_year = {}
+    for r in out:
+        by_year.setdefault((r.get("start") or "unknown")[:4] or "unknown", []).append(r)
+    shards = []
+    for year in sorted(by_year):
+        name = f"vic-{year}.json"
+        path = os.path.join(args.out, name)
+        dicts, enc = encode(by_year[year])
+        _, sha = build.write_json_if_changed(path, {"year": year, "fields": FIELDS,
+                                                    "dict": dicts, "rows": enc})
+        shards.append({"year": year, "file": name, "count": len(by_year[year]),
+                       "bytes": os.path.getsize(path), "sha": sha})
+    shards.sort(key=lambda x: x["year"], reverse=True)
+    payload["shards"] = shards
+    build.write_json_if_changed(os.path.join(args.out, "index.json"), payload)
     if os.path.exists(part):
         os.remove(part)
     summary = (f"**{len(out):,} Victorian contracts** ({new:,} new this run), "
