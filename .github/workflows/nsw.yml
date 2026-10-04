@@ -38,7 +38,7 @@ jobs:
       - run: pip install requests
 
       - name: Parse the exports
-        run: python nsw.py --raw data/nsw/raw --out data/nsw/contracts.json
+        run: python nsw.py --raw data/nsw/raw --out data/nsw
 
       - name: Say how fresh it is
         run: |
