@@ -215,6 +215,9 @@ def main():
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
 
+    if os.path.isfile(args.out):
+        sys.exit(f"nsw: --out is {args.out}, which is a file. This store is a directory of "
+                 f"year shards now; delete the old file or point --out at its directory.")
     os.makedirs(args.raw, exist_ok=True)
     if not args.dry_run:
         keep_raw(args.raw)
