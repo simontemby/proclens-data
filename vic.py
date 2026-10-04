@@ -123,11 +123,23 @@ def text(s):
 
 def buyers(s):
     """Every buyer the search form will filter on, which is how a contract gets
-    an agency without opening a page robots.txt closes."""
-    page = s.get(SEARCH, timeout=90).text
+    an agency without opening a page robots.txt closes.
+
+    A failure here says what came back instead of guessing why. The same request
+    that returns 577 buyers from a desk returned something else to a GitHub
+    runner, and "the platform has changed" was the wrong conclusion to print
+    when the platform had not changed at all."""
+    r = s.get(SEARCH, timeout=90)
+    page = r.text
     m = re.search(r'<select[^>]*name="buyerId"[^>]*>(.*?)</select>', page, re.S)
     if not m:
-        sys.exit("vic: no buyer list on the search form — the platform has changed")
+        title = re.search(r"<title[^>]*>(.*?)</title>", page, re.S)
+        snippet = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", page))[:300]
+        sys.exit(f"vic: no buyer list on the search form.\n"
+                 f"  http {r.status_code}, {len(page):,} bytes, "
+                 f"content-type {r.headers.get('content-type')}\n"
+                 f"  title: {title.group(1).strip()[:80] if title else '(none)'}\n"
+                 f"  page says: {snippet}")
     out = {}
     for value, label in re.findall(r'<option[^>]*value="([^"]*)"[^>]*>(.*?)</option>', m.group(1), re.S):
         name = text(label)
@@ -243,7 +255,7 @@ def collect(s, checkpoint=None, done=None, rows=None, known=None):
     done = set(done or ())
     if not all_rows and known is None:
         all_rows = search(s)
-    print(f"{len(all_rows):,} contracts in the open listing", file=sys.stderr, flush=True)
+        print(f"{len(all_rows):,} contracts in the open listing", file=sys.stderr, flush=True)
     names = buyers(s)
     print(f"{len(names):,} buyers to ask", file=sys.stderr, flush=True)
     failed = []
