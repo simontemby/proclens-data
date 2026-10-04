@@ -66,6 +66,12 @@ agency is recoverable without touching those pages, because the search accepts a
 the form lists all 573 of them. The register is also far larger than it admits: its open
 listing reports 2,308 records, and asking each buyer returns 57,150.
 
+**Victoria cannot be polled from a datacentre.** Its platform sits behind Cloudflare, which
+answers a GitHub Actions runner with `403` and `Just a moment...` while serving an ordinary
+connection normally — so `vic.py` runs from a machine the platform will answer, and the
+result is committed. Every test from a desk passed, which is how a scheduled workflow came
+to be written for something that cannot be scheduled there.
+
 **New South Wales** cannot be polled. Every request that is not a browser gets
 `x-amzn-waf-action: challenge` and a JavaScript puzzle, and there is no open-data copy.
 What the platform does offer is its own public bulk CSV export, so that is what this uses:

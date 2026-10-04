@@ -1,20 +1,23 @@
 name: Victorian contracts
 
 # Victoria publishes its own contract register at tenders.vic.gov.au — 57,000
-# contracts back to 2003, none of it on AusTender. Unlike NSW, the platform
-# serves ordinary HTTP clients, so this runs unattended.
+# contracts back to 2003, none of it on AusTender.
 #
-# Twice a week it asks each buyer only for what is new, stopping at the first
-# page that holds nothing it already has: about fifteen minutes. On the first of
-# the month it sweeps everything, because a contract already held can be amended
-# or moved to expired, and only a full sweep sees that.
+# This CANNOT run on a schedule here, and the schedule has been removed rather
+# than left to fail twice a week. The platform sits behind Cloudflare, which
+# answers a GitHub runner with 403 and "Just a moment..." while serving an
+# ordinary connection normally. Every test from a desk passed, which is why the
+# workflow was written as though it would work. Getting past that interstitial
+# is bot-detection bypass and this archive does not do it.
+#
+# So vic.py is run from a machine the platform will answer — a desk, or a
+# self-hosted runner — and the result committed. The dispatch below stays
+# because it costs nothing and will start working if Victoria stops
+# challenging datacentre traffic; it reports what it was served either way.
 #
 # The pace is deliberate — one request every 1.5 seconds. At half a second the
 # platform began refusing and the run stalled. This is a small state service.
 on:
-  schedule:
-    - cron: "0 13 * * 3,6"    # Wednesday and Saturday, incremental
-    - cron: "0 15 1 * *"      # the 1st of the month, full sweep
   workflow_dispatch:
     inputs:
       full:
@@ -62,7 +65,7 @@ jobs:
         if: steps.guard.outputs.skip != 'true'
         run: |
           full=""
-          if [ "${{ inputs.full }}" = "true" ] || [ "${{ github.event.schedule }}" = "0 15 1 * *" ]; then
+          if [ "${{ inputs.full }}" = "true" ]; then
             full="--full"
           fi
           python vic.py --out data/vic $full
