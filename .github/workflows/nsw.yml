@@ -44,9 +44,9 @@ jobs:
         run: |
           python - <<'PY' >> $GITHUB_STEP_SUMMARY
           import json, datetime
-          d = json.load(open("data/nsw/contracts.json"))
-          pub = [c["published"] for c in d["contracts"] if c.get("published")]
-          latest = max(pub) if pub else "none"
+          d = json.load(open("data/nsw/index.json"))
+          latest = max((sh["year"] for sh in d.get("shards", []) if sh["year"].isdigit()), default="")
+          latest = f"{latest}-12-31" if latest else "none"
           days = (datetime.date.today() - datetime.date.fromisoformat(latest)).days if pub else None
           print(f"**{d['totals']['contracts']:,} NSW contract awards**, newest published {latest}"
                 + (f" — {days} days ago." if days is not None else "."))
