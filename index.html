@@ -1056,6 +1056,13 @@ function jurStats(k){
   const t=(S.stateIdx[k]&&S.stateIdx[k].totals)||null;
   return t?{n:t.contracts||0, v:t.value_aud||0}:null;
 }
+// A store that is not being refreshed says so, with the date it was taken. An
+// archive that quietly serves a stale snapshot as though it were current is
+// worse than one that does not hold it at all.
+function snapNote(k){
+  const sn=(S.stateIdx[k]||{}).snapshot;
+  return sn?` <b>Snapshot taken ${esc(fmtDMY(sn.collected))} and not refreshed since.</b>`:"";
+}
 function buildJur(){
   const el=$("#jurrow"); if(!el) return;
   el.innerHTML=Object.entries(JURISDICTIONS).map(([k,j])=>{
@@ -1063,7 +1070,7 @@ function buildJur(){
     return `<button class="chip${S.jur===k?" on":""}" data-jur="${k}" aria-pressed="${S.jur===k}">`+
       `${esc(j.short)}${st?` <span class="jn">${st.n.toLocaleString()}</span>`:""}</button>`;
   }).join("")+(S.jur==="cth"?"":
-    `<span class="jurnote">${JURISDICTIONS[S.jur].note}</span>`);
+    `<span class="jurnote">${JURISDICTIONS[S.jur].note}${snapNote(S.jur)}</span>`);
   el.querySelectorAll("[data-jur]").forEach(b=>b.onclick=()=>selectJur(b.dataset.jur));
 }
 async function selectJur(k){
@@ -1509,6 +1516,7 @@ function draw(){
       (r.src==="historical"?'<span class="flag" title="Present only in the Department of Finance historical extracts">historical extract</span>':"")}${
       r._jur?`<span class="flag jur" title="${esc(JURISDICTIONS[r._jur].label)} — published to the state's own register, not to AusTender">${esc(JURISDICTIONS[r._jur].short)}</span>`:""}${
       r._jur==="vic"?'<span class="flag" title="The Victorian register does not publish supplier names on the pages this archive is permitted to read">no supplier published</span>':""}${
+      r._jur&&(S.stateIdx[r._jur]||{}).snapshot?`<span class="flag" title="A dated snapshot, not kept up to date — taken ${esc((S.stateIdx[r._jur].snapshot||{}).collected||"")}">snapshot</span>`:""}${
       r.kind==="Standing offer"?'<span class="flag" title="A standing offer, not a contract award">standing offer</span>':""}</td>
   </tr>`;}).join(""));
   const left=S.view.length-(S.page+1)*S.PER;
@@ -1563,7 +1571,9 @@ function drawSup(){
    the first time a contract from that month is opened. */
 function stateDialog(r){
   const j=JURISDICTIONS[r._jur];
-  const rows=[["Register",j.label],["Notice",r.cn],["Agency",r.buyer],
+  const sn=(S.stateIdx[r._jur]||{}).snapshot;
+  const rows=[["Register",j.label+(sn?` — snapshot taken ${fmtDMY(sn.collected)}`:"")],
+    ["Notice",r.cn],["Agency",r.buyer],
     ["Supplier",r.supplier],["ABN",r.abn],["Value",r.value!=null?money(r.value):null],
     ["Type",r.kind],["Category",r.category],["Scope",r.scope],["Status",r.status],
     ["Published",fmtDMY(r.pub)],["Start",fmtDMY(r.start)],["End",fmtDMY(r.end)]];
@@ -1572,6 +1582,7 @@ function stateDialog(r){
     h+='<dt>Supplier</dt><dd>Not published here. The Victorian register names suppliers only on '+
        'its own contract pages, which its robots.txt asks crawlers not to fetch, so this archive '+
        'does not take them. The link below opens the page that has it.</dd>';
+  if(sn) h+=`<dt>Kept up to date</dt><dd>No. ${esc(sn.why)}</dd>`;
   h+=`<dt>Source</dt><dd><a href="${esc(r.url||"#")}" target="_blank" rel="noopener">`+
      `Open on the ${esc(j.short)} register</a></dd>`;
   return h;

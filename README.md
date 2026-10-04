@@ -56,33 +56,45 @@ three different periods is a number that describes nothing.
 | | Contracts | Suppliers named | Threshold | From |
 |---|---|---|---|---|
 | Commonwealth | 1,299,680 | yes, with ABN | $10,000 | 1999, complete from 2014 |
-| Victoria | 57,150 | **no** | $100,000 (VGPB) | 2003 |
+| Victoria | 57,150 *(snapshot, 4 Oct 2026)* | **no** | $100,000 (VGPB) | 2003 |
 | New South Wales | 18,124 | yes, with ABN | $150,000 (GIPA) | 2006 |
 
-**Victoria** publishes no supplier names anywhere this archive is permitted to read. They
-sit on the platform's own contract pages, which its `robots.txt` asks crawlers not to
-fetch, so `vic.py` does not fetch them; each contract links to its page instead. The
-agency is recoverable without touching those pages, because the search accepts a buyer and
-the form lists all 573 of them. The register is also far larger than it admits: its open
-listing reports 2,308 records, and asking each buyer returns 57,150.
-
-**Victoria cannot be polled from a datacentre.** Its platform sits behind Cloudflare, which
-answers a GitHub Actions runner with `403` and `Just a moment...` while serving an ordinary
-connection normally — so `vic.py` runs from a machine the platform will answer, and the
-result is committed. Every test from a desk passed, which is how a scheduled workflow came
-to be written for something that cannot be scheduled there.
+**Victoria is a dated snapshot, not a feed.** 57,150 contracts collected on 4 October 2026
+and not refreshed. Two reasons, and the second decides it: the platform sits behind
+Cloudflare, which answers a datacentre with `403` and an interstitial while serving an
+ordinary connection normally, so it cannot run on a schedule here and getting past that
+challenge is bot-detection bypass; and the register publishes no supplier names anywhere
+this archive is permitted to read — they sit on pages its `robots.txt` closes to crawlers.
+An agency and an amount with no counterparty is not worth a standing workaround. The data
+is kept because it is already collected and costs nothing, and it is labelled a snapshot on
+the jurisdiction row, on every row of the table and in every contract it opens. The agency
+is attached without touching a closed page, because the search accepts a buyer and the form
+lists all 573 of them; that is also how the register turns out to be far larger than it
+admits, its open listing reporting 2,308 records where asking each buyer returns 57,150.
+`vic.py` still runs from a machine the platform answers, if it is ever worth taking again.
 
 **New South Wales** cannot be polled. Every request that is not a browser gets
 `x-amzn-waf-action: challenge` and a JavaScript puzzle, and there is no open-data copy.
 What the platform does offer is its own public bulk CSV export, so that is what this uses:
 a person runs it, the file goes in `data/nsw/raw/` named `can-*.csv` or `son-*.csv`, and
-the workflow ingests it. The export names the contractor and its ABN, which is why NSW is
+the workflow ingests it. One export covers the lot — notice type *Contract award*, 2006 to
+today, about 7MB — so a refresh is a single click, and the workflow says so when the newest
+notice it holds is more than 45 days old. The export names the contractor and its ABN, which is why NSW is
 worth the manual step — **2,761 ABNs hold contracts in both the Commonwealth and NSW**,
 joined on identity rather than on a name match.
 
 The site carries all three behind a jurisdiction selector. Review flags, value growth and
 the vendor inference describe Commonwealth notices only, so they disappear on a state
 register rather than filtering to nothing.
+
+What updates itself, and what does not:
+
+| | Updates |
+|---|---|
+| Commonwealth | twice weekly, plus the weekly export, Senate and historical jobs |
+| Approaches to market and BuyICT | Wednesday and Friday nights |
+| New South Wales | when an export is added — the platform answers only a browser |
+| Victoria | never; it is a snapshot |
 
 ## Search
 
