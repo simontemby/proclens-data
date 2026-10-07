@@ -23,78 +23,233 @@
   ]
  },
  "vendors": {
-  "Microsoft": {
-   "aliases": [
-    "microsoft",
-    "m365",
-    "office 365",
-    "o365",
-    "azure",
-    "dynamics 365",
-    "sharepoint",
-    "power bi",
-    "powerbi",
-    "copilot",
-    "microsoft teams",
-    "windows server",
-    "sql server",
-    "intune",
-    "defender for endpoint"
-   ],
-   "entity": []
-  },
-  "Oracle": {
-   "aliases": [
-    "oracle",
-    "peoplesoft",
-    "jd edwards"
-   ],
-   "entity": []
-  },
-  "SAP": {
-   "aliases": [
-    "sap",
-    "successfactors",
-    "sap ariba",
-    "s/4hana",
-    "s4hana"
-   ],
-   "entity": []
-  },
-  "Salesforce": {
-   "aliases": [
-    "salesforce",
-    "tableau",
-    "mulesoft"
-   ],
-   "entity": [
-    "sfdc"
-   ]
-  },
-  "ServiceNow": {
-   "aliases": [
-    "servicenow",
-    "service now"
-   ],
-   "entity": []
-  },
   "Adobe": {
    "aliases": [
     "adobe"
    ],
    "entity": []
   },
-  "VMware": {
+  "Alteryx": {
    "aliases": [
-    "vmware"
+    "alteryx"
    ],
    "entity": []
+  },
+  "Amazon Web Services": {
+   "aliases": [
+    "amazon web services",
+    "aws"
+   ],
+   "entity": [
+    "amazon"
+   ]
+  },
+  "Anthropic": {
+   "aliases": [
+    "anthropic"
+   ],
+   "entity": []
+  },
+  "Appian": {
+   "aliases": [
+    "appian"
+   ],
+   "entity": []
+  },
+  "Atlassian": {
+   "aliases": [
+    "atlassian",
+    "jira",
+    "confluence"
+   ],
+   "entity": []
+  },
+  "Autodesk": {
+   "aliases": [
+    "autodesk",
+    "autocad",
+    "revit"
+   ],
+   "entity": []
+  },
+  "Axon": {
+   "aliases": [
+    "axon evidence",
+    "evidence.com"
+   ],
+   "entity": []
+  },
+  "Bentley Systems": {
+   "aliases": [
+    "bentley systems",
+    "microstation"
+   ],
+   "entity": []
+  },
+  "Cambridge Intelligence": {
+   "aliases": [
+    "cambridge intelligence",
+    "keylines",
+    "regraph"
+   ],
+   "entity": [
+    "cambridge intelligence"
+   ]
+  },
+  "Cellebrite": {
+   "aliases": [
+    "cellebrite"
+   ],
+   "entity": []
+  },
+  "Check Point": {
+   "aliases": [
+    "check point software",
+    "checkpoint firewall"
+   ],
+   "entity": [
+    "check point"
+   ]
   },
   "Cisco": {
    "aliases": [
     "cisco",
     "webex",
     "meraki"
+   ],
+   "entity": []
+  },
+  "Citrix": {
+   "aliases": [
+    "citrix"
+   ],
+   "entity": []
+  },
+  "Cloudera": {
+   "aliases": [
+    "cloudera",
+    "hortonworks",
+    "cdh",
+    "data hub edition"
+   ],
+   "entity": [
+    "cloudera inc",
+    "cloudera, inc",
+    "cloudera australia"
+   ]
+  },
+  "Collibra": {
+   "aliases": [
+    "collibra"
+   ],
+   "entity": []
+  },
+  "Commvault": {
+   "aliases": [
+    "commvault"
+   ],
+   "entity": []
+  },
+  "Confluent": {
+   "aliases": [
+    "confluent"
+   ],
+   "entity": []
+  },
+  "CrowdStrike": {
+   "aliases": [
+    "crowdstrike"
+   ],
+   "entity": []
+  },
+  "Databricks": {
+   "aliases": [
+    "databricks"
+   ],
+   "entity": []
+  },
+  "Datadog": {
+   "aliases": [
+    "datadog"
+   ],
+   "entity": []
+  },
+  "DocuSign": {
+   "aliases": [
+    "docusign"
+   ],
+   "entity": []
+  },
+  "Dynatrace": {
+   "aliases": [
+    "dynatrace"
+   ],
+   "entity": []
+  },
+  "Elastic": {
+   "aliases": [
+    "elasticsearch",
+    "elastic stack",
+    "elastic cloud"
+   ],
+   "entity": []
+  },
+  "Esri": {
+   "aliases": [
+    "esri",
+    "arcgis"
+   ],
+   "entity": [
+    "esri"
+   ]
+  },
+  "Fortinet": {
+   "aliases": [
+    "fortinet",
+    "fortigate"
+   ],
+   "entity": []
+  },
+  "Genesys": {
+   "aliases": [
+    "genesys"
+   ],
+   "entity": []
+  },
+  "GitHub": {
+   "aliases": [
+    "github"
+   ],
+   "entity": []
+  },
+  "GitLab": {
+   "aliases": [
+    "gitlab"
+   ],
+   "entity": []
+  },
+  "Google": {
+   "aliases": [
+    "google cloud",
+    "google workspace",
+    "gcp",
+    "bigquery"
+   ],
+   "entity": [
+    "google"
+   ]
+  },
+  "HashiCorp": {
+   "aliases": [
+    "hashicorp",
+    "terraform"
+   ],
+   "entity": []
+  },
+  "Hexagon": {
+   "aliases": [
+    "hexagon geospatial",
+    "erdas"
    ],
    "entity": []
   },
@@ -126,418 +281,9 @@
     "n harris"
    ]
   },
-  "Splunk": {
-   "aliases": [
-    "splunk"
-   ],
-   "entity": []
-  },
-  "Elastic": {
-   "aliases": [
-    "elasticsearch",
-    "elastic stack",
-    "elastic cloud"
-   ],
-   "entity": []
-  },
-  "Palantir": {
-   "aliases": [
-    "palantir"
-   ],
-   "entity": []
-  },
-  "Quantexa": {
-   "aliases": [
-    "quantexa"
-   ],
-   "entity": []
-  },
-  "Neo4j": {
-   "aliases": [
-    "neo4j"
-   ],
-   "entity": []
-  },
-  "TigerGraph": {
-   "aliases": [
-    "tigergraph"
-   ],
-   "entity": []
-  },
-  "Linkurious": {
-   "aliases": [
-    "linkurious"
-   ],
-   "entity": []
-  },
-  "Cambridge Intelligence": {
-   "aliases": [
-    "cambridge intelligence",
-    "keylines",
-    "regraph"
-   ],
-   "entity": [
-    "cambridge intelligence"
-   ]
-  },
-  "Snowflake": {
-   "aliases": [
-    "snowflake"
-   ],
-   "entity": []
-  },
-  "Databricks": {
-   "aliases": [
-    "databricks"
-   ],
-   "entity": []
-  },
   "Informatica": {
    "aliases": [
     "informatica"
-   ],
-   "entity": []
-  },
-  "Collibra": {
-   "aliases": [
-    "collibra"
-   ],
-   "entity": []
-  },
-  "Alteryx": {
-   "aliases": [
-    "alteryx"
-   ],
-   "entity": []
-  },
-  "Qlik": {
-   "aliases": [
-    "qlik",
-    "qlikview",
-    "qlik sense"
-   ],
-   "entity": []
-  },
-  "SAS": {
-   "aliases": [
-    "sas institute",
-    "sas viya",
-    "sas software",
-    "sas enterprise",
-    "sas licence",
-    "sas license",
-    "sas analytics"
-   ],
-   "entity": [
-    "sas institute"
-   ]
-  },
-  "Esri": {
-   "aliases": [
-    "esri",
-    "arcgis"
-   ],
-   "entity": [
-    "esri"
-   ]
-  },
-  "Nuix": {
-   "aliases": [
-    "nuix"
-   ],
-   "entity": []
-  },
-  "Cellebrite": {
-   "aliases": [
-    "cellebrite"
-   ],
-   "entity": []
-  },
-  "Magnet Forensics": {
-   "aliases": [
-    "magnet forensics",
-    "magnet axiom"
-   ],
-   "entity": []
-  },
-  "Atlassian": {
-   "aliases": [
-    "atlassian",
-    "jira",
-    "confluence"
-   ],
-   "entity": []
-  },
-  "Red Hat": {
-   "aliases": [
-    "red hat",
-    "redhat",
-    "openshift"
-   ],
-   "entity": [
-    "red hat"
-   ]
-  },
-  "Citrix": {
-   "aliases": [
-    "citrix"
-   ],
-   "entity": []
-  },
-  "Amazon Web Services": {
-   "aliases": [
-    "amazon web services",
-    "aws"
-   ],
-   "entity": [
-    "amazon"
-   ]
-  },
-  "Google": {
-   "aliases": [
-    "google cloud",
-    "google workspace",
-    "gcp",
-    "bigquery"
-   ],
-   "entity": [
-    "google"
-   ]
-  },
-  "TechnologyOne": {
-   "aliases": [
-    "technologyone",
-    "technology one",
-    "ci anywhere"
-   ],
-   "entity": [
-    "technology one"
-   ]
-  },
-  "Workday": {
-   "aliases": [
-    "workday"
-   ],
-   "entity": []
-  },
-  "Objective": {
-   "aliases": [
-    "objective corporation",
-    "objective ecm",
-    "objective keystone",
-    "objective nexus"
-   ],
-   "entity": [
-    "objective corporation"
-   ]
-  },
-  "OpenText": {
-   "aliases": [
-    "opentext",
-    "open text"
-   ],
-   "entity": []
-  },
-  "Micro Focus": {
-   "aliases": [
-    "micro focus"
-   ],
-   "entity": [
-    "micro focus"
-   ]
-  },
-  "Genesys": {
-   "aliases": [
-    "genesys"
-   ],
-   "entity": []
-  },
-  "Okta": {
-   "aliases": [
-    "okta"
-   ],
-   "entity": []
-  },
-  "CrowdStrike": {
-   "aliases": [
-    "crowdstrike"
-   ],
-   "entity": []
-  },
-  "Palo Alto Networks": {
-   "aliases": [
-    "palo alto networks",
-    "prisma cloud",
-    "cortex xsoar"
-   ],
-   "entity": [
-    "palo alto"
-   ]
-  },
-  "Fortinet": {
-   "aliases": [
-    "fortinet",
-    "fortigate"
-   ],
-   "entity": []
-  },
-  "Zscaler": {
-   "aliases": [
-    "zscaler"
-   ],
-   "entity": []
-  },
-  "Tenable": {
-   "aliases": [
-    "tenable"
-   ],
-   "entity": []
-  },
-  "Rapid7": {
-   "aliases": [
-    "rapid7"
-   ],
-   "entity": []
-  },
-  "Mimecast": {
-   "aliases": [
-    "mimecast"
-   ],
-   "entity": []
-  },
-  "Proofpoint": {
-   "aliases": [
-    "proofpoint"
-   ],
-   "entity": []
-  },
-  "Trend Micro": {
-   "aliases": [
-    "trend micro"
-   ],
-   "entity": []
-  },
-  "Check Point": {
-   "aliases": [
-    "check point software",
-    "checkpoint firewall"
-   ],
-   "entity": [
-    "check point"
-   ]
-  },
-  "Commvault": {
-   "aliases": [
-    "commvault"
-   ],
-   "entity": []
-  },
-  "Veeam": {
-   "aliases": [
-    "veeam"
-   ],
-   "entity": []
-  },
-  "Veritas": {
-   "aliases": [
-    "veritas netbackup",
-    "veritas"
-   ],
-   "entity": []
-  },
-  "Rubrik": {
-   "aliases": [
-    "rubrik"
-   ],
-   "entity": []
-  },
-  "NetApp": {
-   "aliases": [
-    "netapp"
-   ],
-   "entity": []
-  },
-  "Nutanix": {
-   "aliases": [
-    "nutanix"
-   ],
-   "entity": []
-  },
-  "Autodesk": {
-   "aliases": [
-    "autodesk",
-    "autocad",
-    "revit"
-   ],
-   "entity": []
-  },
-  "MathWorks": {
-   "aliases": [
-    "mathworks",
-    "matlab",
-    "simulink"
-   ],
-   "entity": []
-  },
-  "GitHub": {
-   "aliases": [
-    "github"
-   ],
-   "entity": []
-  },
-  "GitLab": {
-   "aliases": [
-    "gitlab"
-   ],
-   "entity": []
-  },
-  "HashiCorp": {
-   "aliases": [
-    "hashicorp",
-    "terraform"
-   ],
-   "entity": []
-  },
-  "MongoDB": {
-   "aliases": [
-    "mongodb"
-   ],
-   "entity": []
-  },
-  "Confluent": {
-   "aliases": [
-    "confluent"
-   ],
-   "entity": []
-  },
-  "OpenAI": {
-   "aliases": [
-    "openai",
-    "chatgpt"
-   ],
-   "entity": []
-  },
-  "Anthropic": {
-   "aliases": [
-    "anthropic"
-   ],
-   "entity": []
-  },
-  "Dynatrace": {
-   "aliases": [
-    "dynatrace"
-   ],
-   "entity": []
-  },
-  "Datadog": {
-   "aliases": [
-    "datadog"
-   ],
-   "entity": []
-  },
-  "SolarWinds": {
-   "aliases": [
-    "solarwinds"
    ],
    "entity": []
   },
@@ -559,11 +305,152 @@
    ],
    "entity": []
   },
-  "UiPath": {
+  "LexisNexis": {
    "aliases": [
-    "uipath"
+    "lexisnexis",
+    "lexis nexis"
    ],
    "entity": []
+  },
+  "Linkurious": {
+   "aliases": [
+    "linkurious"
+   ],
+   "entity": []
+  },
+  "Magnet Forensics": {
+   "aliases": [
+    "magnet forensics",
+    "magnet axiom"
+   ],
+   "entity": []
+  },
+  "MathWorks": {
+   "aliases": [
+    "mathworks",
+    "matlab",
+    "simulink"
+   ],
+   "entity": []
+  },
+  "Micro Focus": {
+   "aliases": [
+    "micro focus"
+   ],
+   "entity": [
+    "micro focus"
+   ]
+  },
+  "Microsoft": {
+   "aliases": [
+    "microsoft",
+    "m365",
+    "office 365",
+    "o365",
+    "azure",
+    "dynamics 365",
+    "sharepoint",
+    "power bi",
+    "powerbi",
+    "copilot",
+    "microsoft teams",
+    "windows server",
+    "sql server",
+    "intune",
+    "defender for endpoint"
+   ],
+   "entity": []
+  },
+  "Mimecast": {
+   "aliases": [
+    "mimecast"
+   ],
+   "entity": []
+  },
+  "MongoDB": {
+   "aliases": [
+    "mongodb"
+   ],
+   "entity": []
+  },
+  "Neo4j": {
+   "aliases": [
+    "neo4j"
+   ],
+   "entity": []
+  },
+  "NetApp": {
+   "aliases": [
+    "netapp"
+   ],
+   "entity": []
+  },
+  "Nuix": {
+   "aliases": [
+    "nuix"
+   ],
+   "entity": []
+  },
+  "Nutanix": {
+   "aliases": [
+    "nutanix"
+   ],
+   "entity": []
+  },
+  "Objective": {
+   "aliases": [
+    "objective corporation",
+    "objective ecm",
+    "objective keystone",
+    "objective nexus"
+   ],
+   "entity": [
+    "objective corporation"
+   ]
+  },
+  "Okta": {
+   "aliases": [
+    "okta"
+   ],
+   "entity": []
+  },
+  "OpenAI": {
+   "aliases": [
+    "openai",
+    "chatgpt"
+   ],
+   "entity": []
+  },
+  "OpenText": {
+   "aliases": [
+    "opentext",
+    "open text"
+   ],
+   "entity": []
+  },
+  "Oracle": {
+   "aliases": [
+    "oracle",
+    "peoplesoft",
+    "jd edwards"
+   ],
+   "entity": []
+  },
+  "Palantir": {
+   "aliases": [
+    "palantir"
+   ],
+   "entity": []
+  },
+  "Palo Alto Networks": {
+   "aliases": [
+    "palo alto networks",
+    "prisma cloud",
+    "cortex xsoar"
+   ],
+   "entity": [
+    "palo alto"
+   ]
   },
   "Pegasystems": {
    "aliases": [
@@ -574,21 +461,17 @@
     "pegasystems"
    ]
   },
-  "Appian": {
+  "Proofpoint": {
    "aliases": [
-    "appian"
+    "proofpoint"
    ],
    "entity": []
   },
-  "DocuSign": {
+  "Qlik": {
    "aliases": [
-    "docusign"
-   ],
-   "entity": []
-  },
-  "Zoom": {
-   "aliases": [
-    "zoom video"
+    "qlik",
+    "qlikview",
+    "qlik sense"
    ],
    "entity": []
   },
@@ -597,6 +480,124 @@
     "qualtrics"
    ],
    "entity": []
+  },
+  "Quantexa": {
+   "aliases": [
+    "quantexa"
+   ],
+   "entity": []
+  },
+  "Rapid7": {
+   "aliases": [
+    "rapid7"
+   ],
+   "entity": []
+  },
+  "Red Hat": {
+   "aliases": [
+    "red hat",
+    "redhat",
+    "openshift"
+   ],
+   "entity": [
+    "red hat"
+   ]
+  },
+  "Rubrik": {
+   "aliases": [
+    "rubrik"
+   ],
+   "entity": []
+  },
+  "SAP": {
+   "aliases": [
+    "sap",
+    "successfactors",
+    "sap ariba",
+    "s/4hana",
+    "s4hana"
+   ],
+   "entity": []
+  },
+  "SAS": {
+   "aliases": [
+    "sas institute",
+    "sas viya",
+    "sas software",
+    "sas enterprise",
+    "sas licence",
+    "sas license",
+    "sas analytics"
+   ],
+   "entity": [
+    "sas institute"
+   ]
+  },
+  "Salesforce": {
+   "aliases": [
+    "salesforce",
+    "tableau",
+    "mulesoft"
+   ],
+   "entity": [
+    "sfdc"
+   ]
+  },
+  "ServiceNow": {
+   "aliases": [
+    "servicenow",
+    "service now"
+   ],
+   "entity": []
+  },
+  "Snowflake": {
+   "aliases": [
+    "snowflake"
+   ],
+   "entity": []
+  },
+  "SolarWinds": {
+   "aliases": [
+    "solarwinds"
+   ],
+   "entity": []
+  },
+  "Splunk": {
+   "aliases": [
+    "splunk"
+   ],
+   "entity": []
+  },
+  "Talend": {
+   "aliases": [
+    "talend"
+   ],
+   "entity": []
+  },
+  "TechnologyOne": {
+   "aliases": [
+    "technologyone",
+    "technology one",
+    "ci anywhere"
+   ],
+   "entity": [
+    "technology one"
+   ]
+  },
+  "Tenable": {
+   "aliases": [
+    "tenable"
+   ],
+   "entity": []
+  },
+  "Teradata": {
+   "aliases": [
+    "teradata",
+    "vantage"
+   ],
+   "entity": [
+    "teradata australia"
+   ]
   },
   "Thomson Reuters": {
    "aliases": [
@@ -607,31 +608,58 @@
     "thomson reuters"
    ]
   },
-  "LexisNexis": {
+  "TigerGraph": {
    "aliases": [
-    "lexisnexis",
-    "lexis nexis"
+    "tigergraph"
    ],
    "entity": []
   },
-  "Bentley Systems": {
+  "Trend Micro": {
    "aliases": [
-    "bentley systems",
-    "microstation"
+    "trend micro"
    ],
    "entity": []
   },
-  "Hexagon": {
+  "UiPath": {
    "aliases": [
-    "hexagon geospatial",
-    "erdas"
+    "uipath"
    ],
    "entity": []
   },
-  "Axon": {
+  "VMware": {
    "aliases": [
-    "axon evidence",
-    "evidence.com"
+    "vmware"
+   ],
+   "entity": []
+  },
+  "Veeam": {
+   "aliases": [
+    "veeam"
+   ],
+   "entity": []
+  },
+  "Veritas": {
+   "aliases": [
+    "veritas netbackup",
+    "veritas"
+   ],
+   "entity": []
+  },
+  "Workday": {
+   "aliases": [
+    "workday"
+   ],
+   "entity": []
+  },
+  "Zoom": {
+   "aliases": [
+    "zoom video"
+   ],
+   "entity": []
+  },
+  "Zscaler": {
+   "aliases": [
+    "zscaler"
    ],
    "entity": []
   }
