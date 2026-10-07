@@ -29,6 +29,15 @@ more other vendors, when it is a known licensing channel, or when a documented
 partnership says so. A vendor selling its own product is not an intermediary
 sale: a contract with Palantir for Palantir is the one case where the vendor is
 not in question.
+
+The pattern rules are never used on a supplier that is itself a vendor here.
+They are measured on contracts that NAME a vendor and applied to contracts that
+do not, and those are different populations: a contract with IBM that names no
+product is usually IBM selling IBM, not IBM reselling someone else. Without this
+guard the rules attributed $914m to Amazon Web Services on the strength of three
+contracts that actually said so, including $192m of "Provision of Mainframe
+Hardware". Where such a supplier does resell, the contract says so and that
+evidence stands on its own.
 """
 import json
 import os
@@ -168,10 +177,18 @@ def infer(corpus, data_dir, report):
                 or bool(refresh.PLATFORM_RE.search(sup or ""))
                 or bool(partners.get(skey)))
 
+    # Suppliers that are themselves vendors in this lexicon. For these, only what
+    # a contract states is used; nothing is presumed about whose product it was.
+    def is_vendor(sup):
+        return any(p.search(_norm(sup)) for p in lex["_self"].values())
+
+    vendor_suppliers, blocked = {}, Counter()
     tally = Counter()
     for key, (third, own, skey) in facts.items():
         rec = corpus[key]
         sup = rec.get("supplier") or ""
+        if skey not in vendor_suppliers:
+            vendor_suppliers[skey] = is_vendor(sup)
         if own and not third:
             continue                      # the vendor selling its own product
         if not intermediary(skey, sup):
@@ -202,7 +219,12 @@ def infer(corpus, data_dir, report):
                                      f"{sup} and {p['vendor']} publicly announced a deal with {buyer}, "
                                      f"and this contract's description matches: “{p['evidence']}”",
                                      p["source"], []])
-            if not evidence:
+            if vendor_suppliers.get(skey):
+                # A vendor selling under its own name. Say nothing rather than
+                # presume it was shifting a competitor's product.
+                blocked["contracts"] += 1
+                blocked["value"] += rec["value"] if isinstance(rec.get("value"), (int, float)) else 0
+            if not evidence and not vendor_suppliers.get(skey):
                 g = pair_guess(buyer, skey)
                 if g:
                     v, cns, total = g
@@ -210,13 +232,13 @@ def infer(corpus, data_dir, report):
                                      f"{len(cns)} of {total} other software contracts between {buyer} "
                                      f"and {sup} that name a vendor name {v}." + tested("pair"),
                                      None, sorted(cns)[-3:]])
-            if not evidence:
+            if not evidence and not vendor_suppliers.get(skey):
                 for p in partners.get(skey, []):
                     if any(k in title for k in p.get("keywords", [])):
                         evidence.append([p["vendor"], "possible", "partner",
                                          f"{sup} is a documented {p['vendor']} partner, and this contract's "
                                          f"description mentions {', '.join(p['keywords'])}.", p["source"], []])
-            if not evidence:
+            if not evidence and not vendor_suppliers.get(skey):
                 g = supplier_guess(skey)
                 if g:
                     v, n, n_named = g
@@ -238,4 +260,9 @@ def infer(corpus, data_dir, report):
             tally["vendor_unknown"] += 1
     tally["intermediary_suppliers"] = len({facts[k][2] for k in facts
                                           if corpus[k].get("intermediary")})
+    tally["presumption_withheld_vendor_supplier"] = blocked["contracts"]
     report["vendors"] = dict(tally)
+    report["vendor_presumption_withheld"] = {
+        "contracts": blocked["contracts"], "value_aud": round(blocked["value"], 2),
+        "why": "the supplier is itself a vendor here, so nothing is presumed about "
+               "whose product an unnamed contract was for"}

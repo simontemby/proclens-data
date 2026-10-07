@@ -134,6 +134,19 @@ partnerships, each quoted from a page that was read. A vendor selling its own pr
 never flagged: a Palantir contract for Palantir is the case where the vendor is not in
 question.
 
+Two limits on the presumed tiers, stated here because they decide whether a number is
+usable. The rules are measured on contracts that **do** name a vendor — hide it, ask the
+rule to recover it — and then applied to contracts that **do not**. Those are different
+populations, and a contract naming no product is often not a resale at all. So the archive
+never presumes against a supplier that is itself a vendor here: a contract with IBM naming
+no product is IBM selling IBM, not IBM reselling a competitor. Without that guard the rules
+put **$914 million against Amazon Web Services on the strength of three contracts that
+actually said so**, including $192 million of "Provision of Mainframe Hardware". The guard
+now withholds any presumption on **1,414 contracts worth $6.4 billion**.
+
+Stated and presumed are never added together, anywhere. Microsoft reads $3,650m stated and
+$516m presumed — 88% read straight off the contracts. SAP reads $65m stated and $725m
+presumed, which is 8%, and a figure that weak should be used as a lead, not a fact.
 ## Senate Order snapshots against the API
 
 A snapshot lists a contract as it stood at the end of its reporting period, so it is

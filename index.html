@@ -117,6 +117,7 @@ button:hover,select:hover{background:var(--tint)}
 .jurrow .chip .jn{opacity:.7;font-variant-numeric:tabular-nums;margin-left:5px}
 .jurnote{font-size:12px;line-height:1.45;opacity:.85;max-width:60ch}
 .flag.jur{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.chan .pres{opacity:.72;font-style:italic}
 .chiprow{display:flex;gap:7px;flex-wrap:wrap}
 .chip{font:700 12px var(--mono);padding:6px 10px;border-radius:var(--r);border:2px solid var(--ink);
   background:transparent;color:var(--ink);cursor:pointer}
@@ -1023,15 +1024,20 @@ function buildSuppliersFromCorpus(){
     if(r.buyer) e.buyers.add(r.buyer);
     // Whose product this supplier was selling, where the archive could work it
     // out. A reseller's own name tells you nothing about what it shifted.
+    // Stated and presumed are kept apart, never summed. They are not the same
+    // claim: one is read off the contract, the other is a rule's guess, and a
+    // single blended figure hides which you are looking at.
     if(r.vendor) for(const v of String(r.vendor).split(" / ")){
-      e.vend.set(v,(e.vend.get(v)||0)+((r.cur||"AUD")==="AUD"&&r.value?r.value:0));
-      if(r.vconf==="stated") e.vstated.add(v);
+      const amt=((r.cur||"AUD")==="AUD"&&r.value)?r.value:0;
+      const e2=e.vend.get(v)||{stated:0,presumed:0};
+      if(r.vconf==="stated") e2.stated+=amt; else e2.presumed+=amt;
+      e.vend.set(v,e2);
     }
   }
   const out=[];
   for(const e of by.values()){
     const names=[...e.names.entries()].sort((a,b)=>b[1]-a[1]).map(x=>x[0]);
-    const vend=[...e.vend.entries()].sort((a,b)=>b[1]-a[1]);
+    const vend=[...e.vend.entries()].sort((a,b)=>(b[1].stated+b[1].presumed)-(a[1].stated+a[1].presumed));
     const nsw=S.nswSup?S.nswSup[e.abn]:null;
     out.push({abn:e.abn,canonical:names[0]||e.canonical||"",names,
               n:e.n,total:Math.round(e.total*100)/100,
@@ -1608,10 +1614,11 @@ function drawSup(){
       <div class="t-sub">ABN ${esc(s.abn)}${s.agent?' <span class="flag">agent or trustee</span>':""}</div>
       ${alt.length?`<div class="alias">also seen as: ${alt.slice(0,3).map(esc).join("; ")}`+
         `${alt.length>3?` +${alt.length-3} more`:""}</div>`:""}
-      ${(s.vend||[]).length?`<div class="alias chan">sells: ${s.vend.slice(0,4).map(([v,amt])=>
-        `<b>${esc(v)}</b>${amt?` ${money(amt)}`:""}${s.vstated.includes(v)?"":"*"}`).join(" · ")}`+
-        `${s.vend.length>4?` +${s.vend.length-4} more`:""}`+
-        `${s.vend.some(([v])=>!s.vstated.includes(v))?' <span class="t-sub">* presumed from evidence, not stated on the contract</span>':""}</div>`:""}</td>
+      ${(s.vend||[]).length?`<div class="alias chan">sells: ${s.vend.slice(0,4).map(([v,a])=>
+        `<b>${esc(v)}</b> ${a.stated?money(a.stated):"—"}${a.presumed?` <span class="pres">+${money(a.presumed)} presumed</span>`:""}`
+        ).join(" · ")}${s.vend.length>4?` +${s.vend.length-4} more`:""}`+
+        `<span class="t-sub"> — the first figure is named on the contract; “presumed” is a rule's `+
+        `guess, measured on contracts that do name a vendor and applied to ones that do not.</span></div>`:""}</td>
     <td class="num" data-th="Contracts">${(s.n||0).toLocaleString()}</td>
     <td class="hide-m num" data-th="Agencies">${(s.buyers||0).toLocaleString()}</td>
     <td class="num" data-th="Commonwealth">${money(s.total)}</td>
