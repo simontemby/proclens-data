@@ -1690,7 +1690,13 @@ document.addEventListener("click",async e=>{
     ["Procurement method",d.method],
     ["Category",d.category||(d.cat?catLabel(d.cat)+(/^\d+$/.test(String(d.cat))?` (UNSPSC ${d.cat})`:""):null)],
     ["Agency reference",d.agency_ref],
-    ["Approach to market (ATM)",d.atm],["Standing offer (SON)",d.son],["Panel arrangement",d.panel],
+    ["Approach to market (ATM)",d.atm],
+    // A standing offer ID says nothing on its own. The notice that names it is
+    // published, so the arrangement is given by name and the number kept beside it.
+    ["Bought under",d.son_title?`${d.son_title}${d.son?` (${d.son})`:""}`:d.son],
+    ["Arrangement established by",d.son_agency],
+    ["Arrangement ends",fmtDMY(d.son_end)],
+    ["Panel arrangement",d.panel],
     ["Consultancy",d.consultancy],["Consultancy reason",d.consultancy_reason],
     ["Confidentiality — contract",d.conf_contract],["Reason",d.conf_contract_reason],
     ["Confidentiality — outputs",d.conf_outputs],["Reason (outputs)",d.conf_outputs_reason],

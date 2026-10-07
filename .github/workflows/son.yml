@@ -1,0 +1,71 @@
+name: Standing offer notices
+
+# Every contract notice cites the arrangement it was bought under, and this
+# archive has always held those SON IDs — as bare numbers. AusTender publishes
+# the notices that name them and will hand over all 5,342 as a spreadsheet from
+# its own search page, in one unauthenticated request.
+#
+# This is what makes "how much has been spent under the Software and ERP
+# Marketplace Panel" answerable from the public record rather than by freedom of
+# information request: the volumes were already here, only the labels were not.
+on:
+  schedule:
+    - cron: "0 17 * * 0"     # Sunday, before the Monday export job
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: archive-write
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Refuse to run alongside another archive writer
+        id: guard
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          busy=0
+          for wf in refresh.yml backfill-resume.yml senate.yml so13.yml historical.yml atm.yml export.yml graph.yml nsw.yml son.yml; do
+            [ "$wf" = "son.yml" ] && continue
+            n=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow "$wf" \
+                  --status in_progress --json databaseId --jq 'length' 2>/dev/null || echo 0)
+            busy=$((busy + n))
+          done
+          echo "other archive writers in flight: $busy"
+          [ "$busy" -gt 0 ] && echo "skip=true" >> $GITHUB_OUTPUT || echo "skip=false" >> $GITHUB_OUTPUT
+
+      - uses: actions/checkout@v5
+        if: steps.guard.outputs.skip != 'true'
+      - uses: actions/setup-python@v6
+        if: steps.guard.outputs.skip != 'true'
+        with:
+          python-version: "3.12"
+      - run: pip install requests
+        if: steps.guard.outputs.skip != 'true'
+
+      - name: Take the standing offer export
+        if: steps.guard.outputs.skip != 'true'
+        run: python son.py --out data/son/arrangements.json
+
+      - name: Commit
+        if: steps.guard.outputs.skip != 'true'
+        run: |
+          git config user.name "legal-tender-bot"
+          git config user.email "legal-tender-bot@users.noreply.github.com"
+          git pull --rebase --autostash origin main || { git rebase --abort 2>/dev/null || true; }
+          if grep -rlq '^<<<<<<< ' data 2>/dev/null; then
+            echo 'refusing to commit: conflict markers in data/' >&2; exit 1
+          fi
+          git add data/son
+          if ! git diff --staged --quiet; then
+            git commit -m "Standing offer notices $(date -u +%F)"
+            git push origin main
+          else
+            echo "nothing new"
+          fi

@@ -54,7 +54,8 @@ DETAIL_FIELDS = [
     "supplier_country", "amend_trail", "hist_amendments",
     "senate_obs", "senate_mismatch", "v_api", "v_export", "v_hist", "v_senate",
     "so13_entity", "so13_period", "so13_type", "so13_variations", "so13_approached",
-    "so13_source", "intermediary", "vendor_evidence", "value_concat"]
+    "so13_source", "intermediary", "vendor_evidence", "value_concat",
+    "son_title", "son_agency", "son_end"]
 DETAIL_DICT = ("method", "category", "conf_contract", "conf_outputs", "consultancy",
                "consultancy_reason", "conf_contract_reason", "conf_outputs_reason",
                "agency_branch", "agency_division", "supplier_city", "supplier_country",
@@ -445,6 +446,24 @@ def merge_all(report):
                      "so13_source": s.get("source_url"), "amendments": 0, "_src": {"so13"}}
     only["so13"] = len(so13)
     report["only_in"] = dict(only)
+
+    # 4b. The arrangement each contract was bought under. The archive has always
+    # held the standing offer's ID; a bare number says nothing, and the notices
+    # that name them are published. This is what makes "how much has been spent
+    # under the Software and ERP Marketplace Panel" a question the public record
+    # answers on its own.
+    son = {r["son"]: r for r in
+           read_json(os.path.join(DATA, "son", "arrangements.json"), {}).get("arrangements", [])}
+    named = 0
+    for rec in corpus.values():
+        a = son.get(str(rec.get("son") or "").strip())
+        if not a:
+            continue
+        named += 1
+        rec["son_title"] = a.get("title")
+        rec["son_agency"] = a.get("agency")
+        rec["son_end"] = a.get("end")
+    report["arrangements"] = {"notices_held": len(son), "contracts_named": named}
 
     # 5. Whose product an intermediary sold, where the evidence allows.
     vendors.infer(corpus, DATA, report)
