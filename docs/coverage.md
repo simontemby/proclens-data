@@ -19,24 +19,62 @@ lists **1,386 bodies**, of which:
 | **Statutory advisory structure** | **26** | **no** |
 
 Of those 117 non-reporting bodies, **41 appear in this archive and 76 do not appear at all**.
-Not thinly — absent. Among them:
+Not thinly — absent.
 
-- **WSA Co Limited** — builds Western Sydney Airport
-- **Australian Naval Infrastructure Pty Ltd**
-- **National Reconstruction Fund Corporation** — a $15 billion fund
-- **CEA Technologies Pty Limited** — defence radar
-- Indigenous Business Australia, the Indigenous Land and Sea Corporation, and every Land Council
+But they are not one group, and the difference decides what is worth doing. Finance's own
+guidance, [RMG 403](https://www.finance.gov.au/publications/resource-management-guides/meeting-senate-order-entity-contracts-rmg-403),
+sets the scope of the Senate Order: it is relevant to non-corporate entities "and officials
+in corporate Commonwealth entities (CCEs), **excluding trading Public Non-Financial
+Corporations (PNFCs)** as classified by the Australian Bureau of Statistics."
 
-The NDIA is in this class and is the one we partly hold. What we hold of it shows the shape
-of the whole gap:
+So of the 91 corporate entities and Commonwealth companies:
 
-- **0** records from AusTender. It does not report there and never has.
-- **1,450** records, all from Senate Order 13 listings, covering **two periods only** — 2025
-  and 2025-26. Anything bought before 2025 is absent.
-- The smallest record is **exactly $100,000**, which is the Senate Order floor. Nothing below
-  it is ever listed, by design.
-- **Zero** contracts touching analytics, fraud or entity resolution — for an agency running a
-  fraud taskforce. That is a coverage artefact, not a finding.
+| | Count | Contract disclosure |
+|---|---|---|
+| Covered by the Senate Order | 80 | listings on their own websites — **49 of them absent here** |
+| **Trading PNFCs, excluded** | **11** | **none, anywhere** |
+
+The excluded eleven are the ones holding the most money, which is the opposite of convenient:
+
+> ASC Pty Ltd · Australian Naval Infrastructure · Australian Postal Corporation ·
+> Australian Rail Track Corporation · CEA Technologies · Hearing Australia ·
+> NBN Co Limited · National Intermodal Corporation · Snowy Hydro Ltd · WSA Co Limited
+> *(Airservices Australia is the one exception: it reports to AusTender voluntarily and is held here.)*
+
+NBN Co's annual capital programme and Snowy 2.0's construction are not disclosed
+contract-by-contract **anywhere**: not to AusTender, not under the Senate Order. This is a
+policy boundary, not an engineering problem, and no amount of ingest work crosses it. The
+only routes are Senate Estimates, ANAO audits and their annual reports — none of which give
+a contract register.
+
+### Where the obtainable work actually is
+
+Of the 49 absent entities that the Order does cover, Finance rates **8 as Material** and 41
+as Small:
+
+> Australian Reinsurance Pool Corporation · Clean Energy Finance Corporation ·
+> Coal Mining Industry (Long Service Leave Funding) Corporation · **CSIRO** ·
+> Defence Housing Australia · Housing Australia · Indigenous Business Australia ·
+> National Reconstruction Fund Corporation
+
+CSIRO is the largest and the most surprising absence. These eight are the place to start.
+
+### What makes this slower than it looks
+
+`so13.py` reads spreadsheets, which is what the NDIA publishes. The others do not agree on a
+format. Verified on 8 October 2026:
+
+| Entity | Format |
+|---|---|
+| NDIA, National Library | `.xlsx` — works today |
+| Defence Housing Australia | PDF, 28 pages |
+| Clean Energy Finance Corporation | PDF, 49 pages |
+| Indigenous Business Australia | page exists, no file links — HTML table or generated |
+
+PDF table extraction is where silent corruption enters: `pypdf` returns a header split across
+eleven lines, and a column misread is a wrong supplier against a real amount. If PDFs are
+ingested it must be with per-row validation that refuses anything it cannot parse cleanly,
+not best-effort text scraping. The same discipline the value guards use.
 
 ## What cannot be obtained, and should stop being chased
 
@@ -48,7 +86,14 @@ what was inside it is not.
 
 **OEM composition inside whole-of-government agreements.** Same reason. An FOI to the DTA
 asks for something the DTA may not hold, and triggers third-party consultation under s.27 of
-the FOI Act, which the vendor will use.
+the FOI Act, which the vendor will use. A notice names whoever the agency paid, and AusTender
+has no field for the product, so an OEM sold under a reseller's agreement appears only where
+someone typed its name into a free-text description. IBM holds 3,782 contracts here and 29
+name a product — 0.8% — while its two Whole of Government arrangements carry $3.4bn across
+24 agencies.
+
+**Contracts of trading government business enterprises.** See above: eleven of them, no
+listing anywhere, by policy.
 
 What *is* obtainable is the volume through each arrangement, and that is now held: every
 contract cites its standing offer, and AusTender publishes the notices that name them. See
@@ -56,19 +101,19 @@ contract cites its standing offer, and AusTender publishes the notices that name
 
 ## The work, ranked by payoff over effort
 
-### 1. Senate Order 13 for every corporate entity — *verified feasible, biggest gap*
+### 1. Senate Order listings for the eight material entities — *verified feasible*
 
-`so13.py` already does this for the NDIA and its parser is generic; it has one entry in
-`SOURCES`. Each of the 76 absent entities must publish, twice yearly, every contract of
-$100,000 or more, as a spreadsheet on its own website. The work is finding 76 URLs, not
-writing code.
+Start with CSIRO, Defence Housing Australia, the Clean Energy Finance Corporation, Housing
+Australia, the National Reconstruction Fund Corporation, Indigenous Business Australia, the
+Australian Reinsurance Pool Corporation and Coal Mining Industry LSL. Each publishes twice
+yearly; `so13.py`'s parser already handles the spreadsheet case.
 
-Expected: the single largest increase in coverage available, into entities that currently
-contribute nothing. Unknown until collected, but WSA Co and Australian Naval Infrastructure
-alone build multi-billion-dollar assets.
+This is a smaller prize than it first appeared, because the entities holding the most money
+are the excluded eleven. It is still the largest obtainable gain, and CSIRO alone is a
+research procurement programme that currently contributes nothing.
 
-Risk: each entity publishes on its own page in its own format, and pages move. The ingest
-must refuse a changed format loudly rather than store nothing quietly.
+Risk: three formats, not one, and pages move. The ingest must refuse a changed format loudly
+rather than store nothing quietly — and must not best-effort its way through a PDF.
 
 ### 2. Earlier Senate Order periods for entities already held — *partly blocked*
 
