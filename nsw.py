@@ -293,6 +293,33 @@ def main():
     payload["shards"] = shards
     payload.pop("contracts", None)
     build.write_json_if_changed(os.path.join(args.out, "index.json"), payload)
+
+    # A roll-up by ABN, so the site can show a supplier's NSW footprint beside
+    # its Commonwealth one without fetching the whole register. An ABN is the
+    # join: the same number holds contracts in both, which no name match can
+    # tell you reliably.
+    by = {}
+    for r in rows:
+        a = r.get("abn")
+        if not a:
+            continue
+        e = by.setdefault(a, {"n": 0, "v": 0.0, "name": r.get("supplier") or "",
+                              "agencies": set(), "kinds": set()})
+        e["n"] += 1
+        e["v"] += r["value"] if isinstance(r.get("value"), (int, float)) else 0
+        if r.get("agency"):
+            e["agencies"].add(r["agency"])
+        if r.get("kind"):
+            e["kinds"].add(r["kind"])
+    build.write_json_if_changed(os.path.join(args.out, "suppliers.json"), {
+        "generated": payload["generated"],
+        "note": "NSW contract awards and standing offers rolled up by supplier ABN, so a "
+                "supplier's NSW footprint can be shown beside its Commonwealth one. Keyed by "
+                "ABN because a name match is not an identity.",
+        "fields": ["contracts", "value_aud", "agencies", "name"],
+        "suppliers": {a: [e["n"], round(e["v"], 2), len(e["agencies"]), e["name"]]
+                      for a, e in sorted(by.items(), key=lambda kv: -kv[1]["v"])},
+    })
     kinds = ", ".join(f"{n:,} {k.lower()}s" for k, n in
                       Counter(r.get("kind") for r in rows).most_common())
     summary = (f"**{len(rows):,} NSW notices** ({kinds}; {len(rows) - before:,} new), "
