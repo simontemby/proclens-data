@@ -73,6 +73,39 @@ TOLERANCE = 1.0
 # typing mistake, and the archive does not get to decide which by itself.
 CONTRADICTION = 100.0
 
+# A notice records what was paid and to whom. It does not have to say what was
+# bought, and often does not: "Platform as a Service (PaaS - Cloud)", "Labour
+# Hire", "ICT Contractor Services". The words below describe a transaction
+# rather than a thing, and a description made only of them names nothing. This
+# is the same test graph.py applies to supplier names — strip what is common to
+# everything and see whether anything is left.
+GENERIC_WORDS = set("""provision provide supply supplies delivery deliver purchase purchases
+service services support maintenance licence license licences licenses licensing
+software hardware equipment product products goods system systems solution solutions
+platform infrastructure cloud paas saas iaas as a the of and for to with from
+ict it computer computers technology technologies digital data
+professional consultancy consulting consultant consultants contractor contract contracts
+management managed labour hire temporary personnel staff resources resource
+annual ongoing new renewal subscription subscriptions agreement arrangement panel
+works work project program various misc miscellaneous other general related
+australia australian commonwealth department agency office national
+fee fees cost costs charge charges payment payments invoice
+one two three four five year years month months fy quarter
+p l pty ltd limited inc""".split())
+_NUMERIC = re.compile(r"^[\d\-/.]+$")
+
+
+def names_nothing(title):
+    """True when a description is made entirely of transaction vocabulary.
+
+    Not a criticism of the agency: there is no field in AusTender for the
+    product, so a diligent officer and a careless one can file the same words.
+    It is a statement about what this archive can answer. Searching for a
+    product will never find these contracts, however much was spent on them."""
+    kept = [t for t in re.findall(r"[a-z0-9]+", str(title or "").lower())
+            if t not in GENERIC_WORDS and not _NUMERIC.match(t) and len(t) > 1]
+    return bool(str(title or "").strip()) and not kept
+
 
 def concatenated(value, trail):
     """Some implausible values are two amendments typed into one field.
@@ -496,6 +529,8 @@ def merge_all(report):
             lo, hi = min(others), max(others)
             if abs(lo) * CONTRADICTION <= abs(v) or abs(v) * CONTRADICTION <= abs(hi):
                 f.append("value_contradicted")
+        if names_nothing(rec.get("title")):
+            f.append("product_not_named")
         cc = concatenated(v, rec.get("trail"))
         if cc:
             rec["value_concat"] = cc
@@ -716,6 +751,11 @@ def main():
                                "pct": round(100 * f / n, 2) if n else 0.0}
                            for y, (f, n) in sorted(per.items()) if n >= 1000}
     totals["flag_coverage"] = coverage
+    unnamed = [r for r in corpus.values() if "product_not_named" in (r.get("flags") or "")]
+    totals["product_not_named"] = {
+        "contracts": len(unnamed),
+        "value_aud": round(sum(r["value"] for r in unnamed
+                               if isinstance(r.get("value"), (int, float))), 2)}
     report["terms"] = sum(len(v) for v in postings.values())
     report["term_shards"] = len(postings)
     write_json_if_changed(os.path.join(out, "index.json"), {
