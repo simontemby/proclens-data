@@ -31,8 +31,26 @@ import time
 from datetime import datetime, timezone
 
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 import build
+
+# anao.gov.au hangs — not refuses, hangs until the client gives up — when reached
+# from a GitHub runner. A hang rather than a refusal, from a cloud network only,
+# is the signature of a host that advertises IPv6 and does not answer on it, so
+# the crawl is pinned to IPv4. Their robots.txt permits /pubs/ and /work/; this
+# is accommodating broken plumbing, not working around a decision.
+def _ipv4_only():
+    import socket
+    orig = socket.getaddrinfo
+
+    def only_v4(host, port, family=0, *a, **kw):
+        return orig(host, port, socket.AF_INET, *a, **kw)
+    socket.getaddrinfo = only_v4
+
+
+_ipv4_only()
 
 DATA = os.environ.get("PROCLENS_DATA", "data")
 INDEX = "https://www.anao.gov.au/pubs/performance-audit"
@@ -144,6 +162,10 @@ def main():
 
     s = requests.Session()
     s.headers["User-Agent"] = UA
+    retry = Retry(total=3, connect=3, read=3, backoff_factor=2.0,
+                  status_forcelist=(429, 500, 502, 503, 504),
+                  allowed_methods=frozenset(["GET"]))
+    s.mount("https://", HTTPAdapter(max_retries=retry))
     found = collect(s)
     if len(found) < 100:
         sys.exit(f"anao: only {len(found)} audits found; refusing to replace the store on "
