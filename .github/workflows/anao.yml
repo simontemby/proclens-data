@@ -9,9 +9,17 @@ name: Auditor-General audits
 # objective. The findings are not summarised — an audit's conclusions are
 # argument, not data, and summarising them automatically would put words in the
 # Auditor-General's mouth.
+#
+# There is no schedule, because this cannot run here. anao.gov.au answers a desk
+# in under a second and never answers a GitHub runner at all — the connection
+# hangs and then fails, through retries and with IPv6 ruled out, which is a
+# datacentre address being dropped rather than a policy. Their robots.txt
+# permits /pubs/ and /work/; the network does not.
+#
+# So anao.py is run from a machine the site will answer, and the result is
+# committed. Audits arrive at about thirty a year, so a refresh every few months
+# loses nothing. The dispatch below stays, and reports what it was served.
 on:
-  schedule:
-    - cron: "0 19 * * 0"     # Sunday, after the standing offer job
   workflow_dispatch:
 
 permissions:

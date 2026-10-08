@@ -137,13 +137,26 @@ The NDIA publishes only 2024–2026 on its page; older listings are gone. The In
 is the candidate route (it returned 503 when tried on 7 October). Worth one attempt per
 entity, and worth nothing if the entity never published.
 
-### 3. ANAO performance audits — *needs a spike*
+### 3. ANAO performance audits — *done 9 October 2026, refreshed by hand*
 
-The Auditor-General audits ICT procurement repeatedly, and the reports carry figures and
-sometimes vendor breakdowns that appear in no register — including spend inside arrangements.
-anao.gov.au has no feed and no obvious index endpoint; the report listing needs discovering
-the way BuyICT's did. Value is corroboration and the occasional number that exists nowhere
-else, not bulk.
+1,481 performance audits back to 1995, with report number, title, date and the audit's own
+stated objective. **211 touch procurement, contracting or ICT** — Defence's infantry fighting
+vehicles, the OneSKY contract, the DTA's implementation of procurement reforms.
+
+The findings are deliberately not summarised. An audit's conclusions are argument, not data,
+and summarising them automatically would put words in the Auditor-General's mouth. What the
+index does is let a reader looking at an agency learn that its procurement has been examined,
+and go and read it.
+
+Not scheduled, and this is the third source in this archive that cannot be: anao.gov.au
+answers a desk in under a second and never answers a GitHub runner, through retries and with
+IPv6 ruled out. Their robots.txt permits `/pubs/` and `/work/`; the network does not. Audits
+arrive at about thirty a year, so refreshing by hand costs nothing.
+
+**A pattern worth naming.** Victoria, NSW and now the ANAO all serve an ordinary connection
+and refuse or ignore a cloud one. Anything built here should be tested from a runner before
+it is called automatic — three times in this archive a source has been described as
+scheduled on the strength of a test from a desk, and three times that was wrong.
 
 ### 4. Transparency Portal annual reports — *spiked 9 October 2026, does not close the gap*
 
