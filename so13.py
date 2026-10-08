@@ -9,7 +9,18 @@ OCDS feed. Under Senate Continuing Order 13 those entities must instead publish,
 twice yearly, every contract of $100,000 or more (GST inclusive) on their own
 website, as a spreadsheet.
 
-This ingests those spreadsheets.
+This ingests those listings.
+
+Most entities do not publish a spreadsheet. The NDIA, the National Library and the
+Reserve Bank do; CSIRO publishes nineteen PDFs and no spreadsheet at all, and so
+do Defence Housing Australia, the Clean Energy Finance Corporation, the National
+Reconstruction Fund and the Australian Reinsurance Pool Corporation. So this reads
+both, and reads PDFs by their ruled table structure rather than by scraping text:
+pypdf returns a CSIRO header split across eleven lines, where pdfplumber returns
+nine columns with the rows intact.
+
+A row that does not parse is dropped and counted, never half-stored. A column
+misread puts a wrong supplier against a real amount, which is worse than a gap.
 
 Two things make this data BETTER than AusTender for value questions:
   * it carries "Original Contract Value" alongside the current consideration,
@@ -29,6 +40,11 @@ try:
 except ImportError:
     sys.exit("so13.py needs openpyxl: pip install openpyxl")
 
+try:
+    import pdfplumber
+except ImportError:
+    pdfplumber = None     # only needed for the entities that publish PDFs
+
 UA = os.environ.get("PROCLENS_UA", "LegalTender/1.0 (procurement transparency research)")
 TIMEOUT = 90
 
@@ -40,6 +56,50 @@ SOURCES = [
         "short": "ndia",
         "page": "https://www.ndis.gov.au/policies-rules-and-legal/legal/senate-order-13-entity-contracts",
         "base": "https://www.ndis.gov.au",
+    },
+    # Finance rates these Material and none of them reported anywhere in this
+    # archive before. CSIRO is the largest: nineteen listings back to 2016-17.
+    {
+        "entity": "Commonwealth Scientific and Industrial Research Organisation",
+        "short": "csiro",
+        "page": "https://www.csiro.au/en/about/corporate-governance/access-to-information/contracts",
+        "base": "https://www.csiro.au",
+    },
+    {
+        "entity": "Defence Housing Australia",
+        "short": "dha",
+        "page": "https://www.dha.gov.au/about-us/reporting/senate-order-on-entity-contracts",
+        "base": "https://www.dha.gov.au",
+    },
+    {
+        "entity": "Clean Energy Finance Corporation",
+        "short": "cefc",
+        "page": "https://www.cefc.com.au/who-we-are/corporate-governance/",
+        "base": "https://www.cefc.com.au",
+    },
+    {
+        "entity": "National Reconstruction Fund Corporation",
+        "short": "nrf",
+        "page": "https://www.nrf.gov.au/who-we-are/our-governance",
+        "base": "https://www.nrf.gov.au",
+    },
+    {
+        "entity": "Australian Reinsurance Pool Corporation",
+        "short": "arpc",
+        "page": "https://arpc.gov.au/about/corporate-governance/",
+        "base": "https://arpc.gov.au",
+    },
+    {
+        "entity": "Reserve Bank of Australia",
+        "short": "rba",
+        "page": "https://www.rba.gov.au/about-rba/entity-contracts",
+        "base": "https://www.rba.gov.au",
+    },
+    {
+        "entity": "National Library of Australia",
+        "short": "nla",
+        "page": "https://nla.gov.au/about-us/tenders-and-contracts/contracts-by-reporting-period",
+        "base": "https://nla.gov.au",
     },
 ]
 
@@ -75,9 +135,33 @@ def get(url, binary=False):
 
 
 def discover(src):
-    """Find the listing spreadsheets linked from an entity's SO13 page."""
+    """Find the listings linked from an entity's Senate Order page.
+
+    Two shapes: a direct link to a file, which is what most entities publish, and
+    a content-management id whose visible text carries the period, which is what
+    the NDIA publishes."""
     html = get(src["page"])
     out, seen = [], set()
+    for m in re.finditer(r'href="([^"]+\.(xlsx|xls|csv|pdf))"([^>]*)>(.{0,400}?)</a>',
+                         html, re.S | re.I):
+        href, ext, _, label = m.groups()
+        url = href if href.startswith("http") else src["base"] + ("" if href.startswith("/") else "/") + href
+        if url in seen:
+            continue
+        seen.add(url)
+        text = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", label)).strip()
+        # Governance pages carry board charters, privacy policies and investment
+        # mandates beside the listings. Only take what says it is a listing: a
+        # contract listing, or a Senate Order, or a reporting period.
+        hay = (text + " " + href).lower()
+        if not re.search(r"senate\s*order|entity\s*contract|contract.{0,20}listing|"
+                         r"listing.{0,20}contract|murray motion|contract register", hay):
+            continue
+        out.append({"url": url, "label": (text or href.rsplit("/", 1)[-1])[:120],
+                    "period": period_of(text + " " + href),
+                    "xlsx": ext.lower() in ("xlsx", "xls")})
+    if out:
+        return out
     # Links are media ids; the visible text carries the reporting period.
     for m in re.finditer(r'href="(/media/(\d+)/download[^"]*)"([^>]*)>(.{0,400}?)</a>',
                          html, re.S | re.I):
@@ -94,11 +178,31 @@ def discover(src):
     return out
 
 
+MONTHS = ("january|february|march|april|may|june|july|august|september|october|"
+          "november|december|jan|feb|mar|apr|jun|jul|aug|sep|oct|nov|dec")
+
+
 def period_of(text):
-    m = re.search(r"(20\d\d)\s*[-–—]\s*(?:20)?(\d\d)", text)
+    """Which reporting period a listing covers.
+
+    Read from the two dates that bound it, because the file names do not agree on
+    a convention: "1 July 2024 to 30 June 2025" and "1-Jan-2024-31-Dec-2024" and
+    "2023-24" all appear, and matching digits out of a name turned the first into
+    "2024-30". A period that runs July to June is the financial year; one that
+    runs January to December is the calendar year."""
+    t = text.lower()
+    dates = re.findall(r"(?:\d{1,2}\s*[-\s]\s*)?(" + MONTHS + r")\w*\s*[-\s]\s*(20\d\d)", t)
+    if len(dates) >= 2:
+        (m1, y1), (m2, y2) = dates[0], dates[-1]
+        if m1.startswith("jul") and m2.startswith("jun") and y2 == str(int(y1) + 1):
+            return f"{y1}-{y2[2:]}"
+        if m1.startswith("jan") and m2.startswith("dec") and y1 == y2:
+            return y1
+        return f"{y1}-{y2[2:]}" if y1 != y2 else y1
+    m = re.search(r"(20\d\d)\s*[-–—/]\s*(?:20)?(\d\d)\b", t)
     if m:
         return f"{m.group(1)}-{m.group(2)}"
-    m = re.search(r"(20\d\d)", text)
+    m = re.search(r"(20\d\d)", t)
     return m.group(1) if m else "unknown"
 
 
@@ -151,6 +255,84 @@ def as_date(v):
 
 
 def parse(blob, entity, period, url):
+    """A listing, whichever way the entity chose to publish it."""
+    if blob[:4] == b"%PDF":
+        return parse_pdf(blob, entity, period, url)
+    return parse_xlsx(blob, entity, period, url)
+
+
+def parse_pdf(blob, entity, period, url):
+    """PDF listings, read by their ruled table structure.
+
+    Tables run across pages and the header is repeated on each, so every table is
+    taken and any row that repeats the header is dropped. A row with no supplier
+    or no readable amount is dropped too, and counted: a misread column would put
+    a wrong supplier against a real amount, which is worse than a missing row."""
+    if pdfplumber is None:
+        sys.exit("so13.py needs pdfplumber for PDF listings: pip install pdfplumber")
+    out, idx, dropped = [], None, 0
+    with pdfplumber.open(io.BytesIO(blob)) as pdf:
+        for page in pdf.pages:
+            for table in page.extract_tables():
+                if not table:
+                    continue
+                rows = [[("" if c is None else str(c).replace("\n", " ").strip()) for c in r]
+                        for r in table]
+                h = next((i for i, r in enumerate(rows[:3]) if map_columns(r).get("supplier") is not None), None)
+                if h is not None:
+                    idx = map_columns(rows[h])
+                    body = rows[h + 1:]
+                elif idx is None:
+                    continue              # a table before any header is not a listing
+                else:
+                    body = rows
+                for r in body:
+                    row = build_row(r, idx, entity, period, url)
+                    if row is None:
+                        dropped += 1
+                    else:
+                        out.append(row)
+    if dropped:
+        print(f"    {dropped} row(s) dropped: no readable amount", file=sys.stderr)
+    return out
+
+
+def build_row(r, idx, entity, period, url):
+    """One contract, or None when the row carries nothing to record.
+
+    A blank contractor is not a reason to discard a row. CSIRO's listing names no
+    contractor for a run of its contracts — one of them worth $27,025,790.75,
+    several marked confidential for costing or profit reasons — and those are
+    disclosed contracts with an unnamed counterparty, which is a fact about the
+    listing rather than a parsing failure. The amount is what a row must have."""
+    def cell(k):
+        i = idx.get(k)
+        v = r[i] if i is not None and i < len(r) else None
+        return v
+    supplier = str(cell("supplier") or "").strip()
+    if re.match(r"^(total|contractor|contractor name|supplier|vendor)$", supplier, re.I):
+        return None                                  # a repeated header
+    value = as_money(cell("value"))
+    if value is None:
+        return None                                  # nothing to record
+    return {
+        "entity": entity, "supplier": supplier or "(contractor not named in the listing)",
+        "abn": re.sub(r"\D", "", str(cell("abn") or "")) or "",
+        "title": str(cell("title") or "").strip(),
+        "value": value, "value_first": as_money(cell("value_first")),
+        "variations": cell("variations"),
+        "start": as_date(cell("start")), "end": as_date(cell("end")),
+        "method": str(cell("method") or "").strip(),
+        "ctype": str(cell("ctype") or "").strip(),
+        "approached": cell("approached"),
+        "confidential": str(cell("confidential") or "").strip(),
+        "conf_reason": str(cell("conf_reason") or "").strip(),
+        "cn": str(cell("cn") or "").strip(),
+        "period": period, "source_url": url,
+    }
+
+
+def parse_xlsx(blob, entity, period, url):
     wb = openpyxl.load_workbook(io.BytesIO(blob), read_only=True, data_only=True)
     sheet = next((n for n in wb.sheetnames if re.search(r"contract|listing", n, re.I)),
                  wb.sheetnames[-1])
@@ -211,10 +393,12 @@ def main():
             continue
         print(f"{src['short']}: {len(files)} listing files found", file=sys.stderr)
         for f in files:
-            if not f["xlsx"]:
-                # PDF listings exist for older periods; they need a different
-                # extractor and are skipped rather than guessed at.
-                print(f"  skip (not a spreadsheet): {f['label']}", file=sys.stderr)
+            # Both formats are read now. An entity that publishes the same period
+            # as a spreadsheet and a PDF is read from the spreadsheet, which needs
+            # no table reconstruction.
+            if not f["xlsx"] and any(g["xlsx"] and g["period"] == f["period"] for g in files):
+                print(f"  skip (spreadsheet exists for {f['period']}): {f['label'][:60]}",
+                      file=sys.stderr)
                 continue
             try:
                 rows = parse(get(f["url"], binary=True), src["entity"], f["period"], f["url"])
