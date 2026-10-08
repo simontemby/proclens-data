@@ -68,27 +68,23 @@ SOURCES = [
     {
         "entity": "Defence Housing Australia",
         "short": "dha",
-        "page": "https://www.dha.gov.au/about-us/reporting/senate-order-on-entity-contracts",
+        "page": "https://www.dha.gov.au/about-us/planning-and-reporting/procurement-and-consultancies",
         "base": "https://www.dha.gov.au",
     },
     {
         "entity": "Clean Energy Finance Corporation",
         "short": "cefc",
-        "page": "https://www.cefc.com.au/who-we-are/corporate-governance/",
+        "page": "https://www.cefc.com.au/who-we-are/governance/compliance/",
         "base": "https://www.cefc.com.au",
     },
-    {
-        "entity": "National Reconstruction Fund Corporation",
-        "short": "nrf",
-        "page": "https://www.nrf.gov.au/who-we-are/our-governance",
-        "base": "https://www.nrf.gov.au",
-    },
-    {
-        "entity": "Australian Reinsurance Pool Corporation",
-        "short": "arpc",
-        "page": "https://arpc.gov.au/about/corporate-governance/",
-        "base": "https://arpc.gov.au",
-    },
+    # Not reachable this way, and left here so the gap stays visible rather than
+    # being forgotten. Both publish listings — the files exist and are public —
+    # but build their index pages in the browser: the NRF's governance page links
+    # none of its PDFs in the served HTML, and ARPC's publications page renders a
+    # "Senate Orders (0)" filter whose contents arrive by script. Reaching them
+    # needs a browser, which is not something a scheduled job should be doing.
+    #   National Reconstruction Fund Corporation — nrf.gov.au/who-we-are/our-governance
+    #   Australian Reinsurance Pool Corporation — arpc.gov.au/publications/
     {
         "entity": "Reserve Bank of Australia",
         "short": "rba",

@@ -258,7 +258,15 @@ def load_senate():
 
 def load_so13():
     """One record per contract: listings repeat a contract in every period it is
-    current, sometimes with its supplier's name spelt differently."""
+    current, sometimes with its supplier's name spelt differently.
+
+    Not every entity publishes a contract ID. The NDIA does; CSIRO's listings
+    carry only a contractor, a subject, two dates and an amount, and requiring an
+    ID discarded all 28,423 of its rows without saying so. Where there is no ID,
+    the contract is keyed on what identifies it — who, when it started, for how
+    much — which also dedupes it across the periods it stays current in. Two
+    genuinely different contracts with the same supplier, start date and amount
+    would merge; losing an agency entirely is the worse error."""
     out = {}
     for name in sorted(os.listdir(os.path.join(DATA, "so13"))) if os.path.isdir(
             os.path.join(DATA, "so13")) else []:
@@ -270,7 +278,11 @@ def load_so13():
             r = dict(zip(p["fields"], row))
             ident = str(r.get("cn") or "").strip()
             if not ident:
-                continue
+                nat = "|".join(str(r.get(f) or "").strip().lower()
+                               for f in ("supplier", "start", "value", "title"))
+                if not any(x for x in nat.split("|")[:3]):
+                    continue
+                ident = hashlib.sha1(nat.encode()).hexdigest()[:12]
             k = f"{short.upper()}:{ident}"
             if k not in out or str(r.get("period") or "") >= str(out[k].get("period") or ""):
                 out[k] = r
