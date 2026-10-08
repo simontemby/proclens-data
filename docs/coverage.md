@@ -101,12 +101,28 @@ contract cites its standing offer, and AusTender publishes the notices that name
 
 ## The work, ranked by payoff over effort
 
-### 1. Senate Order listings for the eight material entities — *verified feasible*
+### 1. Senate Order listings for the material entities — *five done, 8 October 2026*
 
-Start with CSIRO, Defence Housing Australia, the Clean Energy Finance Corporation, Housing
-Australia, the National Reconstruction Fund Corporation, Indigenous Business Australia, the
-Australian Reinsurance Pool Corporation and Coal Mining Industry LSL. Each publishes twice
-yearly; `so13.py`'s parser already handles the spreadsheet case.
+**Done:** CSIRO (17,785 contracts, $24.9bn), the Clean Energy Finance Corporation (729,
+$11.5bn), Defence Housing Australia (667, $635m), the Reserve Bank (1,179, $4.1bn) and the
+National Library (391, $126m), beside the NDIA. **22,582 contracts worth $41.5bn** from
+bodies that publish nothing to AusTender.
+
+**Still to do:** Housing Australia, Indigenous Business Australia and Coal Mining Industry
+LSL have not been attempted. The National Reconstruction Fund and the Australian Reinsurance
+Pool were attempted and are blocked: both publish, and both build their index pages in the
+browser, so a scheduled job cannot see the links. They are left as comments in `so13.py`
+rather than removed.
+
+Two things made this slower than "find 76 URLs":
+
+- Entities put these pages where you would not look. Defence Housing Australia's is under
+  procurement and consultancies; the CEFC's is under governance → compliance. Guessing cost
+  more attempts than searching.
+- The build was discarding what the ingest collected. `load_so13()` required a contract ID,
+  and only the NDIA publishes one, so all 28,423 CSIRO rows were dropped in silence. An
+  ingest that works and a build that drops it looks exactly like an ingest that does not
+  work.
 
 This is a smaller prize than it first appeared, because the entities holding the most money
 are the excluded eleven. It is still the largest obtainable gain, and CSIRO alone is a
