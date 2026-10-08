@@ -118,6 +118,9 @@ button:hover,select:hover{background:var(--tint)}
 .jurnote{font-size:12px;line-height:1.45;opacity:.85;max-width:60ch}
 .flag.jur{background:var(--ink);color:var(--paper);border-color:var(--ink)}
 .chan .pres{opacity:.72;font-style:italic}
+.warn{display:block;margin-top:8px;padding:8px 10px;border:2px solid var(--pink);
+  background:color-mix(in srgb, var(--pink) 10%, transparent);font-size:12px;
+  line-height:1.5;max-width:86ch;color:var(--ink)}
 .chiprow{display:flex;gap:7px;flex-wrap:wrap}
 .chip{font:700 12px var(--mono);padding:6px 10px;border-radius:var(--r);border:2px solid var(--ink);
   background:transparent;color:var(--ink);cursor:pointer}
@@ -569,7 +572,7 @@ const FLAGS={
   source_disagreement:"A Senate Order snapshot reports a value that never appears anywhere in the AusTender API's history of this contract",
   late_amendment:"A Senate Order snapshot carried this contract's amended value more than 42 days before AusTender published the amendment",
   confidential:"The contract or its outputs carry confidentiality provisions",
-  consultancy:"Reported as a consultancy"
+  consultancy:"Reported as a consultancy — only where AusTender's weekly export or the historical extracts cover the contract, which leaves several years almost unflagged"
 };
 const DATA="./data/";
 /* Three registers, not one archive. They answer different questions and were
@@ -1358,6 +1361,32 @@ function noticeMatch(r,qq){
   if(qq.phrase&&r._h.indexOf(" "+qq.phrase)<0) return false;
   return true;
 }
+/* Two flags are only as good as the source that carries them. Consultancy and
+   confidentiality come from AusTender's weekly export, kept for eighteen months,
+   and from the historical extracts, which stop before 2020 — so almost nothing
+   between 2021 and 2024 carries either. Filtering on one of those for those
+   years returns a number that looks like an answer and is wrong by two orders of
+   magnitude, so the years are named wherever the filter is on. */
+const THIN_COVERAGE = 1.0;   // per cent of a year's contracts carrying the flag
+function coverageWarning(){
+  const cov=((S.cidx&&S.cidx.totals)||{}).flag_coverage||{};
+  const out=[];
+  for(const f of S.flags){
+    const years=cov[f]; if(!years) continue;
+    const thin=Object.entries(years).filter(([,v])=>v.pct<THIN_COVERAGE).map(([y])=>y).sort();
+    if(!thin.length) continue;
+    const runs=[]; let a=null,b=null;
+    for(const y of thin){ const n=Number(y);
+      if(a===null){a=b=n;} else if(n===b+1){b=n;} else {runs.push([a,b]);a=b=n;} }
+    if(a!==null) runs.push([a,b]);
+    out.push(`<b>${esc(f)}</b> is recorded only where AusTender's weekly export or the `+
+      `historical extracts cover a contract. `+
+      `${runs.map(([x,y])=>x===y?x:`${x}–${y}`).join(", ")} `+
+      `${thin.length===1?"is":"are"} almost entirely unflagged, so this filter does not mean `+
+      `those contracts were not consultancies — only that this archive cannot tell.`);
+  }
+  return out.length?`<div class="warn">${out.join("<br>")}</div>`:"";
+}
 function applyAtm(){
   showResults(true);
   const qq=S.q?(S.query||parseQuery(S.q)):null, today=new Date().toISOString().slice(0,10);
@@ -1504,7 +1533,8 @@ function apply(){
     `· <b>${money(tot)}</b> committed`+
     ` · <b title="Contracts whose end date has not yet passed">${money(live)}</b> still running`+
     `<span class="t-sub"> (${liveN.toLocaleString()} contracts${noEnd?`, ${noEnd.toLocaleString()} with no end date`:""})</span>`+
-    (non?` · ${non} non-AUD excluded`:"");
+    (non?` · ${non} non-AUD excluded`:"")+
+    coverageWarning();
   $("#tb").innerHTML=""; draw(); updateSortIndicator(); filterBadge();
 }
 function draw(){

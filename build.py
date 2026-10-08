@@ -694,6 +694,28 @@ def main():
     totals["contradicted"] = {"contracts": len(contra),
                               "value_aud": round(sum(r["value"] for r in contra), 2)}
     flag_counts = Counter(f for r in corpus.values() for f in (r.get("flags") or "").split(",") if f)
+
+    # Some flags are only as good as the source that carries them, and that
+    # source does not cover every year. Consultancy and confidentiality come from
+    # AusTender's weekly export, which is kept for eighteen months, and from the
+    # historical extracts, which stop before 2020 — so 0.0% of 2021 contracts
+    # carry a consultancy flag against 4.5% of 2019. A filter that silently
+    # returns almost nothing for four years is a false answer, not a gap, so the
+    # coverage is measured here and the page says so wherever the filter is used.
+    coverage = {}
+    for field in ("consultancy", "confidential"):
+        per = defaultdict(lambda: [0, 0])
+        for r in corpus.values():
+            y = (r.get("pub") or "")[:4]
+            if not y.isdigit():
+                continue
+            per[y][1] += 1
+            if field in (r.get("flags") or ""):
+                per[y][0] += 1
+        coverage[field] = {y: {"flagged": f, "contracts": n,
+                               "pct": round(100 * f / n, 2) if n else 0.0}
+                           for y, (f, n) in sorted(per.items()) if n >= 1000}
+    totals["flag_coverage"] = coverage
     report["terms"] = sum(len(v) for v in postings.values())
     report["term_shards"] = len(postings)
     write_json_if_changed(os.path.join(out, "index.json"), {
