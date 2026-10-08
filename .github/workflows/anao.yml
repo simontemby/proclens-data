@@ -1,0 +1,72 @@
+name: Auditor-General audits
+
+# This archive records what was bought, not whether it was bought well. The
+# Auditor-General has published 1,484 performance audits, 211 of them touching
+# procurement, contracting or ICT, and they carry findings and figures that
+# appear in no register.
+#
+# An index only: report number, title, date and the audit's own stated
+# objective. The findings are not summarised — an audit's conclusions are
+# argument, not data, and summarising them automatically would put words in the
+# Auditor-General's mouth.
+on:
+  schedule:
+    - cron: "0 19 * * 0"     # Sunday, after the standing offer job
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: archive-write
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Refuse to run alongside another archive writer
+        id: guard
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          busy=0
+          for wf in refresh.yml backfill-resume.yml senate.yml so13.yml historical.yml atm.yml export.yml graph.yml nsw.yml son.yml anao.yml; do
+            [ "$wf" = "anao.yml" ] && continue
+            n=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow "$wf" \
+                  --status in_progress --json databaseId --jq 'length' 2>/dev/null || echo 0)
+            busy=$((busy + n))
+          done
+          echo "other archive writers in flight: $busy"
+          [ "$busy" -gt 0 ] && echo "skip=true" >> $GITHUB_OUTPUT || echo "skip=false" >> $GITHUB_OUTPUT
+
+      - uses: actions/checkout@v5
+        if: steps.guard.outputs.skip != 'true'
+      - uses: actions/setup-python@v6
+        if: steps.guard.outputs.skip != 'true'
+        with:
+          python-version: "3.12"
+      - run: pip install requests
+        if: steps.guard.outputs.skip != 'true'
+
+      - name: Index the audits
+        if: steps.guard.outputs.skip != 'true'
+        run: python anao.py --out data/anao/audits.json
+
+      - name: Commit
+        if: steps.guard.outputs.skip != 'true'
+        run: |
+          git config user.name "legal-tender-bot"
+          git config user.email "legal-tender-bot@users.noreply.github.com"
+          git pull --rebase --autostash origin main || { git rebase --abort 2>/dev/null || true; }
+          if grep -rlq '^<<<<<<< ' data 2>/dev/null; then
+            echo 'refusing to commit: conflict markers in data/' >&2; exit 1
+          fi
+          git add data/anao
+          if ! git diff --staged --quiet; then
+            git commit -m "Auditor-General audits $(date -u +%F)"
+            git push origin main
+          else
+            echo "nothing new"
+          fi

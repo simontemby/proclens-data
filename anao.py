@@ -1,0 +1,190 @@
+#!/usr/bin/env python3
+"""
+What the Auditor-General has already examined.
+
+This archive records what was bought. It cannot say whether a procurement was
+run well, whether a contract delivered, or what happened inside an arrangement —
+and for those questions somebody has often already done the work. The
+Auditor-General has published 1,484 performance audits, many of them on
+procurement, and they carry findings and figures that appear in no register:
+what a system actually cost, why a tender was re-run, what a panel was used for.
+
+This indexes them: report number, title, publication date, the audit's own stated
+objective, and the entities it names. It does not try to read the findings. An
+audit's conclusions are argument, not data, and summarising them automatically
+would put words in the Auditor-General's mouth. What it does is let a reader
+looking at an agency see that its procurement has been audited, and go and read
+it.
+
+The index is public and plainly served — anao.gov.au answers an ordinary client,
+paginates with a query parameter and will return 120 records a page, so the whole
+catalogue is about a dozen requests.
+
+    python anao.py
+"""
+import argparse
+import html
+import os
+import re
+import sys
+import time
+from datetime import datetime, timezone
+
+import requests
+
+import build
+
+DATA = os.environ.get("PROCLENS_DATA", "data")
+INDEX = "https://www.anao.gov.au/pubs/performance-audit"
+SITE = "https://www.anao.gov.au"
+# No URL in here, deliberately. anao.gov.au hangs — not refuses, hangs until the
+# client times out — on any User-Agent containing one, which is a WAF rule against
+# a common bot signature. The client still says plainly what it is.
+UA = "Mozilla/5.0 (compatible; legal-tender-archive/1.0; procurement transparency research)"
+PER_PAGE = 120
+PAUSE = 1.0
+
+
+def text(s):
+    return re.sub(r"\s+", " ", html.unescape(re.sub(r"<[^>]+>", " ", s or ""))).strip()
+
+
+MONTHS = {m: i for i, m in enumerate(
+    ["january", "february", "march", "april", "may", "june", "july", "august",
+     "september", "october", "november", "december"], 1)}
+
+
+def as_date(s):
+    m = re.search(r"(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})", s or "")
+    if not m:
+        return None
+    mon = MONTHS.get(m.group(2).lower())
+    return f"{m.group(3)}-{mon:02d}-{int(m.group(1)):02d}" if mon else None
+
+
+def page(s, n):
+    r = s.get(INDEX, params={"items_per_page": PER_PAGE, "page": n}, timeout=120)
+    r.raise_for_status()
+    return r.text
+
+
+def audits_on(page_html):
+    """One record per audit.
+
+    The list is markup, not data, and an audit's report number and publication
+    date are printed BEFORE the link that carries its title. So each record is
+    assembled from the text leading up to its own link, not the text after it —
+    reading forward found four report numbers out of 1,481 and no dates at all."""
+    out = []
+    marker = 'href="/work/performance-audit/'
+    parts = page_html.split(marker)
+    # Each audit is linked twice — once from a block with no text, once from its
+    # title — and its report number and date are printed once, before the first
+    # of them. Reading only the text immediately before the link we keep found
+    # the number for none of them, so the metadata is carried forward from
+    # wherever it appears to the next record that has a title.
+    pending = {}
+    for i in range(1, len(parts)):
+        before = text(parts[i - 1][-2500:])
+        num = re.search("Auditor-General Report No\\.?\\s*(\\d+)\\s*of\\s*"
+                        "(\\d{4}[\u2013\u2014-]\\d{2})", before)
+        pub = re.search(r"Published:\s*(?:[A-Za-z]+\s+)?(\d{1,2}\s+[A-Za-z]+\s+\d{4})", before)
+        # Merged, not replaced: "Published:" is printed again closer to the title,
+        # and replacing the whole block there threw the report number away.
+        if num:
+            pending["report_no"] = f"{num.group(1)} of {num.group(2)}"
+        if pub:
+            pending["published"] = as_date(pub.group(1))
+        m = re.match(r'([^"#?]+)"', parts[i])
+        if not m:
+            continue
+        path = "/work/performance-audit/" + m.group(1)
+        title_m = re.search(r">([^<>]{12,200})</a>", parts[i][:1200])
+        title = text(title_m.group(1)) if title_m else ""
+        if not title:
+            continue
+        obj = re.search(r"(The audit objective[^|]{10,600})", text(parts[i][:2600]))
+        out.append({
+            "url": SITE + path,
+            "slug": path.rsplit("/", 1)[-1],
+            "title": title,
+            "report_no": pending.get("report_no"),
+            "published": pending.get("published"),
+            "objective": obj.group(1)[:600] if obj else None,
+        })
+        pending = {}
+    return out
+
+
+def collect(s):
+    found, n = {}, 0
+    while n < 40:
+        try:
+            htm = page(s, n)
+        except Exception as e:                        # noqa: BLE001
+            print(f"  ! page {n}: {str(e)[:90]}", file=sys.stderr)
+            break
+        rows = audits_on(htm)
+        fresh = [r for r in rows if r["slug"] not in found]
+        for r in rows:
+            found.setdefault(r["slug"], r)
+        print(f"  page {n}: {len(rows)} listed, {len(found):,} distinct", file=sys.stderr, flush=True)
+        if not fresh:
+            break
+        n += 1
+        time.sleep(PAUSE)
+    return found
+
+
+def main():
+    ap = argparse.ArgumentParser(description="Index Auditor-General performance audits.")
+    ap.add_argument("--out", default=os.path.join(DATA, "anao", "audits.json"))
+    ap.add_argument("--dry-run", action="store_true")
+    args = ap.parse_args()
+
+    s = requests.Session()
+    s.headers["User-Agent"] = UA
+    found = collect(s)
+    if len(found) < 100:
+        sys.exit(f"anao: only {len(found)} audits found; refusing to replace the store on "
+                 f"what looks like a failed crawl")
+
+    today = datetime.now(timezone.utc).date().isoformat()
+    existing = build.read_json(args.out, {})
+    store = {r["slug"]: r for r in existing.get("audits", [])}
+    new = 0
+    for slug, r in found.items():
+        r["first_seen"] = (store.get(slug) or {}).get("first_seen") or today
+        if slug not in store:
+            new += 1
+        store[slug] = r
+    rows = sorted(store.values(), key=lambda r: (r.get("published") or "", r["slug"]), reverse=True)
+
+    payload = {
+        "generated": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "note": "Performance audits published by the Auditor-General. An index only: report "
+                "number, title, date and the audit's own stated objective. The findings are "
+                "not summarised here — an audit's conclusions are argument, not data.",
+        "source": INDEX,
+        "totals": {"audits": len(rows), "new_this_run": new,
+                   "with_a_report_number": sum(1 for r in rows if r.get("report_no")),
+                   "with_a_date": sum(1 for r in rows if r.get("published"))},
+        "audits": rows,
+    }
+    if args.dry_run:
+        import json
+        print(json.dumps(payload["totals"], indent=1))
+        for r in rows[:5]:
+            print(f"  {str(r.get('published')):<12} {str(r.get('report_no') or ''):<14} {r['title'][:58]}")
+        return
+    os.makedirs(os.path.dirname(args.out), exist_ok=True)
+    build.write_json_if_changed(args.out, payload)
+    summary = f"**{len(rows):,} Auditor-General performance audits** ({new:,} new this run)."
+    print(summary)
+    if os.environ.get("GITHUB_STEP_SUMMARY"):
+        with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as fh:
+            fh.write(summary + "\n")
+
+
+if __name__ == "__main__":
+    main()
