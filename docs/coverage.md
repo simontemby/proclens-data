@@ -145,12 +145,47 @@ anao.gov.au has no feed and no obvious index endpoint; the report listing needs 
 the way BuyICT's did. Value is corroboration and the occasional number that exists nowhere
 else, not bulk.
 
-### 4. Transparency Portal annual reports — *needs a spike*
+### 4. Transparency Portal annual reports — *spiked 9 October 2026, does not close the gap*
 
-transparency.gov.au carries every Commonwealth annual report. Corporate entities disclose
-consultancy expenditure and significant contracts there, which is a second route into the
-same 76 entities. The site is a JavaScript application with no visible API; its data
-endpoints need discovering.
+The API is real and open: `data.transparency.gov.au/api/datasets/simplified`, no sign-in, no
+challenge. It ignores query parameters and returns everything — about 70MB, and it truncates
+at a different point on every request, so it would need a resumable fetch.
+
+What it holds, and what it does not:
+
+- **Entity-level consultancy expenditure** per entity per year: number of contracts and total
+  dollars, from the annual report.
+- **Supplier-level consultancy shares** — name, ABN and expenditure, which would join to this
+  archive on the ABN. **Non-corporate entities only: 367 records, none from a corporate
+  entity or Commonwealth company.** So it does not reach the bodies this archive cannot see.
+- Financial statements, employee counts and governance data for all body types — no contracts.
+- Named individuals' salaries, which this archive has no reason to republish and will not.
+
+So it is a cross-check on entities already held, not new coverage. Worth building only for
+the integrity comparison, and that comparison is currently blocked by the next item.
+
+### 4b. The consultancy flag has a hole in the middle — *found while spiking the above*
+
+Comparing annual-report consultancy totals against this archive's consultancy-flagged spend
+produced a 600-fold gap at Defence for 2022-23. That is not a finding about Defence; it is a
+finding about this archive. The flag comes from AusTender's weekly export, which is retained
+for eighteen months, and the historical extracts stop before 2020:
+
+| Year published | Contracts carrying the flag |
+|---|---|
+| 2019 | 4.5% |
+| 2020 | 2.2% |
+| **2021** | **0.0%** |
+| **2022** | **0.1%** |
+| **2023** | **0.2%** |
+| 2024 | 0.5% |
+| 2025 | 3.5% |
+
+Any question asked of this archive about consultancies between 2021 and 2024 will give an
+answer that is wrong by two orders of magnitude, and nothing on the site currently says so.
+That matters more than any new source: a visible gap is a caveat, an invisible one is a
+false answer. Fixing it means finding a copy of the export's consultancy field for those
+years, and it may not exist outside AusTender.
 
 ### 5. Senate Estimates Questions on Notice — *manual, high value per item*
 
