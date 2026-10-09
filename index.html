@@ -640,7 +640,7 @@ const JURISDICTIONS={
 const S={cidx:null,monthIx:null,months:new Map(),detail:new Map(),terms:new Map(),upd:null,updDetail:null,
   rows:[],view:[],sup:[],supView:[],supFilter:"",nswSup:undefined,series:undefined,page:0,sPage:0,PER:100,query:null,qRaw:"",searched:null,
   q:"",agency:"",sort:"pub",flags:new Set(),d1:"",d2:"",v1:null,v2:null,tab:"c",
-  jur:"cth",state:{nsw:new Map(),vic:new Map()},stateIdx:{},agIdx:undefined,audits:undefined,
+  jur:"cth",state:{nsw:new Map(),vic:new Map()},stateIdx:{},agIdx:undefined,audits:undefined,budget:undefined,
   atm:new Map(),bi:new Map(),biIdx:undefined,atmRows:[],atmView:[],alerts:[],nPage:0,nStatus:"open",nWatch:"",nDesc:false};
 const $=s=>document.querySelector(s);
 const money=n=>n==null?"—":"$"+Math.round(n).toLocaleString("en-AU");
@@ -1846,6 +1846,11 @@ async function agencyData(){
     try{ const r=await fetch(CORPUS+"agencies.json",{cache:"no-cache"});
          if(r.ok) S.agIdx=new Map((await r.json()).agencies.map(a=>[a.name,a])); }catch(e){}
   }
+  if(S.budget===undefined){
+    S.budget=null;
+    try{ const r=await fetch(DATA+"budget/programs.json",{cache:"no-cache"});
+         if(r.ok) S.budget=new Map((await r.json()).agencies.map(a=>[a.agency,a])); }catch(e){}
+  }
   if(S.audits===undefined){
     S.audits=null;
     try{ const r=await fetch(DATA+"anao/audits.json",{cache:"no-cache"});
@@ -1882,6 +1887,22 @@ async function openAgency(name){
   if(f.confidential) gaps.push(`<b>${f.confidential[0].toLocaleString()}</b>, ${money(f.confidential[1])}, carry confidentiality provisions.`);
   if(gaps.length) h+=`<h4>What this archive cannot tell you</h4><ul class="agl">`+
     gaps.map(g=>`<li>${g}</li>`).join("")+`</ul>`;
+  // What it is funded to spend, beside what it has contracted. These are
+  // appropriations, not contracts, and are never added to the figures above.
+  const bg=S.budget&&S.budget.get(name);
+  if(bg){
+    const ys=Object.keys(bg.years).sort();
+    const last=ys[ys.length-1], y=bg.years[last];
+    const fwd=Object.entries(y.forward||{}).sort();
+    h+=`<h4>Funded to spend</h4><p class="t-sub" style="margin:0 0 6px">`+
+      `Portfolio Budget Statements — appropriations, not contracts, and not added to anything above. `+
+      `No technology split exists in them.</p><ul class="agl">`+
+      `<li><b>${money(y.budget)}</b> in ${esc(last)} across ${y.programs} programme${y.programs===1?"":"s"}`+
+      `${bg.portfolio?` <span class="t-sub">${esc(bg.portfolio)} portfolio</span>`:""}</li>`+
+      (fwd.length?`<li>forward estimates: ${fwd.map(([fy,v])=>`${esc(fy)} ${money(v)}`).join(" · ")}</li>`:"")+
+      (ys.length>1?`<li class="t-sub">${ys.length} budget years held, ${esc(ys[0])} to ${esc(last)}</li>`:"")+
+      `</ul>`;
+  }
   const au=(S.audits&&S.audits.get(name))||[];
   h+=`<h4>Examined by the Auditor-General</h4>`;
   h+= au.length
