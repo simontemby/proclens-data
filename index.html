@@ -125,6 +125,9 @@ button:hover,select:hover{background:var(--tint)}
 .agl{margin:0;padding-left:20px;font-size:13px;line-height:1.6}
 .agl li{margin-bottom:4px}
 .agkv{margin:0}
+.chipgrp{flex-basis:100%;font:700 10px/1.6 var(--mono);text-transform:uppercase;
+  letter-spacing:.08em;color:var(--muted);margin:6px 0 -2px}
+.chipgrp:first-child{margin-top:0}
 .warn{display:block;margin-top:8px;padding:8px 10px;border:2px solid var(--pink);
   background:color-mix(in srgb, var(--pink) 10%, transparent);font-size:12px;
   line-height:1.5;max-width:86ch;color:var(--ink)}
@@ -392,6 +395,9 @@ html{touch-action:manipulation}
         tenders</span><span class="ts">Tenders</span><span class="dot" id="alertDot" hidden
         aria-hidden="true"></span></button>
     </div>
+    <button class="iconbtn" id="gaps" aria-label="What this archive cannot see"
+            title="What this archive cannot see">
+      <span class="ico" aria-hidden="true">◴</span><span class="lbl">Gaps</span></button>
     <button class="iconbtn" id="about" aria-label="About the data" title="About the data">
       <span class="ico" aria-hidden="true">ⓘ</span><span class="lbl">About the data</span></button>
     <button class="iconbtn" id="csv" aria-label="Export CSV" title="Export CSV">
@@ -541,6 +547,12 @@ html{touch-action:manipulation}
   <div class="dh"><strong id="about-t">About this archive</strong>
     <button class="closex" id="aboutX" aria-label="Close">✕</button></div>
   <div class="db" id="about-b"></div>
+</dialog>
+
+<dialog id="covdlg" aria-labelledby="covdlg-t">
+  <div class="dh"><strong id="covdlg-t">What this archive cannot see</strong>
+    <button class="closex" aria-label="Close" onclick="document.getElementById('covdlg').close()">✕</button></div>
+  <div class="db" id="covdlg-b"></div>
 </dialog>
 
 <dialog id="agdlg" aria-labelledby="agdlg-t">
@@ -1126,16 +1138,40 @@ async function selectJur(k){
   rebuild();
   buildAgencies();
 }
+/* Fourteen flags in one row read as fourteen accusations. They are three
+   different kinds of statement and are now grouped as such: what the notice
+   itself records, what is worth a second look, and what this archive cannot
+   tell you. The last group is not a criticism of anyone — it is the archive
+   describing its own limits. */
+const FLAG_GROUPS=[
+  ["What the notice records",
+   ["confidential","consultancy","limited_tender","long_term","agent_or_trustee","reseller_sale"]],
+  ["Worth a second look",
+   ["late_publish","value_growth","threshold_hugging","backdated","late_amendment"]],
+  ["What this archive cannot tell you",
+   ["product_not_named","value_contradicted","source_disagreement"]],
+];
 function buildChips(){
   const n=$("#chips");
-  for(const [k,d] of Object.entries(FLAGS)){
-    const b=document.createElement("button");
-    b.className="chip"; b.type="button"; b.dataset.f=k; b.title=d;
-    b.setAttribute("aria-pressed","false"); b.textContent=k.replace(/_/g," ");
-    b.onclick=()=>{S.flags.has(k)?S.flags.delete(k):S.flags.add(k);
-      b.setAttribute("aria-pressed",String(S.flags.has(k))); apply();};
-    n.append(b);
+  n.innerHTML="";
+  const placed=new Set();
+  for(const [label,keys] of FLAG_GROUPS){
+    const present=keys.filter(k=>FLAGS[k]);
+    if(!present.length) continue;
+    const h=document.createElement("span");
+    h.className="chipgrp"; h.textContent=label;
+    n.append(h);
+    for(const k of present){ placed.add(k); n.append(chipFor(k)); }
   }
+  for(const k of Object.keys(FLAGS)) if(!placed.has(k)) n.append(chipFor(k));
+}
+function chipFor(k){
+  const b=document.createElement("button");
+  b.className="chip"; b.type="button"; b.dataset.f=k; b.title=FLAGS[k];
+  b.setAttribute("aria-pressed",String(S.flags.has(k))); b.textContent=k.replace(/_/g," ");
+  b.onclick=()=>{S.flags.has(k)?S.flags.delete(k):S.flags.add(k);
+    b.setAttribute("aria-pressed",String(S.flags.has(k))); apply();};
+  return b;
 }
 const SORT_TH={pub:["pub","descending"],pub_asc:["pub","ascending"],value:["value","descending"],
   value_asc:["value","ascending"],start:["start","descending"],end:["end","ascending"]};
@@ -1193,6 +1229,7 @@ function wire(){
   });
   $("#csv").onclick=exportCSV;
   // The two standing notes are worth keeping but not worth the top of the page.
+  $("#gaps").onclick=coveragePage;
   $("#about").onclick=()=>{
     const a=S.atmIdx;
     $("#about-b").innerHTML=
@@ -1678,6 +1715,63 @@ function drawSup(){
 /* Everything this archive holds about one agency, in one place. The roll-up is
    precomputed by build.py; the audits are fetched once and matched on the
    entity name the Auditor-General itself records, not on words in a title. */
+/* An archive that lists only what it holds invites a reader to believe the rest
+   does not exist. Every figure here is measured by the build, not written by
+   hand, so the page cannot drift away from the data it describes. */
+function coveragePage(){
+  const t=(S.cidx&&S.cidx.totals)||{}, rep=(S.cidx&&S.cidx.report)||{};
+  const pn=t.product_not_named||{}, cd=t.contradicted||{};
+  const cov=(t.flag_coverage||{}).consultancy||{};
+  const thin=Object.entries(cov).filter(([,v])=>v.pct<1).map(([y])=>y).sort();
+  const pct=v=>t.value_aud?`${(100*v/t.value_aud).toFixed(1)}%`:"";
+  const sec=(h,body)=>`<h4>${esc(h)}</h4>${body}`;
+  let out="";
+  out+=sec("What was bought is often not recorded",
+    `<p>AusTender has no field for the product. A description can name a category and nothing
+     else — <i>Platform as a Service (PaaS - Cloud)</i>, <i>Labour Hire</i> — and
+     <b>${(pn.contracts||0).toLocaleString()} contracts</b>, ${money(pn.value_aud||0)}
+     (${pct(pn.value_aud||0)} of all spend), do exactly that. Searching for a product will
+     never find them, however much was spent. This is the shape of the record, not a failing
+     of any agency.</p>`);
+  out+=sec("Sources that contradict each other",
+    `<p><b>${(cd.contracts||0).toLocaleString()} contracts</b>, ${money(cd.value_aud||0)}
+     (${pct(cd.value_aud||0)}), carry a value another source puts at least a hundred times
+     differently. Both figures are kept and neither is corrected. Two of them —
+     $123,000,198,000 and $121,149,136,502 — are a pair of amendments typed into one field,
+     and together they are 15% of this archive's headline total.</p>`);
+  if(thin.length) out+=sec("Flags their source cannot carry",
+    `<p>Consultancy and confidentiality are recorded only where AusTender's weekly export,
+     kept eighteen months, or the historical extracts, which stop before 2020, cover a
+     contract. <b>${esc(thin.join(", "))}</b> are almost entirely unflagged. A consultancy
+     search across those years answers confidently and wrongly, so the filter says so
+     wherever it is used.</p>`);
+  out+=sec("Entities that report to nobody",
+    `<p>Corporate Commonwealth entities do not report to AusTender. Six are held here from
+     the listings they publish themselves — CSIRO, the Clean Energy Finance Corporation,
+     Defence Housing Australia, the Reserve Bank, the National Library and the NDIA — at a
+     floor of $100,000, below which nothing is ever listed.</p>
+     <p><b>Eleven disclose nothing at all.</b> Trading government business enterprises are
+     excluded from the Senate Order and report to no register: NBN Co, Snowy Hydro,
+     Australian Rail Track, Australia Post, ASC, Australian Naval Infrastructure, WSA Co,
+     CEA Technologies, National Intermodal and Hearing Australia. Their contracts are not
+     public anywhere.</p>`);
+  out+=sec("Three registers, never added together",
+    `<p>The Commonwealth reports from $10,000 and names every supplier. New South Wales
+     publishes awards over $150,000 with the contractor and its ABN. Victoria publishes over
+     $100,000 and <b>names no supplier at all</b> — those sit on pages its robots.txt closes
+     to crawlers — and what is held of it is a snapshot, not a feed. A sum across the three
+     would describe nothing.</p>`);
+  out+=sec("What is presumed, and how often it is right",
+    `<p>Where a reseller's contract does not name the vendor, a rule may presume one, and
+     every presumption carries its measured accuracy: ${rep.vendor_rule_accuracy
+       ? `${rep.vendor_rule_accuracy.agency_and_supplier.right_pct}% and ${rep.vendor_rule_accuracy.supplier.right_pct}%`
+       : "a measured rate"}, tested on every build against contracts whose vendor is named.
+     Nothing is presumed about a supplier that is itself a vendor: a contract with IBM that
+     names no product is IBM selling IBM, and guessing otherwise once attributed $914m to
+     Amazon Web Services on the strength of three contracts that said so.</p>`);
+  $("#covdlg-b").innerHTML=out;
+  $("#covdlg").showModal();
+}
 async function agencyData(){
   if(S.agIdx===undefined){
     S.agIdx=null;
