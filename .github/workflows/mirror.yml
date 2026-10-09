@@ -1,0 +1,72 @@
+name: Mirror data to R2
+
+# UNVERIFIED until the four secrets below exist. This workflow skips itself
+# silently without them, so adding it changes nothing until someone opts in.
+#
+# Why: 548MB of the 1GB GitHub Pages allows is already served, every data commit
+# rebuilds 2,813 files against a ten-builds-an-hour ceiling, and .git is 433MB
+# because git keeps every version of every shard. R2's free tier is 10GB, a
+# million writes and ten million reads a month, with egress free — which at
+# 5-20 files a page load is between 500,000 and 2 million page loads.
+#
+# It will NOT make the site faster. Pages and R2 both sit behind a CDN and the
+# time is round-trips, not origin.
+#
+# This mirrors; it does not move. Git stays the source of record, because the
+# trail of what this archive said and when is most of why it can be believed.
+#
+# One-time setup:
+#   1. Create an R2 bucket and allow public read, or put it behind a custom domain.
+#   2. Allow CORS from the site's origin, methods GET and HEAD.
+#   3. Add repository secrets R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY,
+#      R2_BUCKET.
+#   4. Only once a run has succeeded and the files are readable: point DATA in
+#      index.html at the bucket, and add data/ to the Jekyll excludes to reclaim
+#      the Pages allowance. Do those two last and separately — the site breaks
+#      if the bucket is not serving.
+on:
+  push:
+    paths: ["data/**"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Is this configured?
+        id: cfg
+        env:
+          HAVE: ${{ secrets.R2_ACCOUNT_ID != '' && secrets.R2_ACCESS_KEY_ID != '' && secrets.R2_SECRET_ACCESS_KEY != '' && secrets.R2_BUCKET != '' }}
+        run: |
+          if [ "$HAVE" = "true" ]; then echo "go=true" >> $GITHUB_OUTPUT
+          else echo "R2 secrets not set — nothing to do."; echo "go=false" >> $GITHUB_OUTPUT; fi
+
+      - uses: actions/checkout@v5
+        if: steps.cfg.outputs.go == 'true'
+
+      - name: Sync data/ to the bucket
+        if: steps.cfg.outputs.go == 'true'
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          ENDPOINT: https://${{ secrets.R2_ACCOUNT_ID }}.r2.cloudflarestorage.com
+          BUCKET: ${{ secrets.R2_BUCKET }}
+        run: |
+          # --size-only: these files are rewritten by the build whenever their
+          # content changes and not otherwise, so a timestamp comparison would
+          # re-upload the archive every run.
+          aws s3 sync data "s3://$BUCKET/data" \
+            --endpoint-url "$ENDPOINT" \
+            --size-only --no-progress \
+            --content-type application/json \
+            --exclude "*" --include "*.json"
+          aws s3 sync data "s3://$BUCKET/data" \
+            --endpoint-url "$ENDPOINT" \
+            --size-only --no-progress \
+            --exclude "*.json"
+          echo "### Mirrored \`data/\` to R2" >> $GITHUB_STEP_SUMMARY

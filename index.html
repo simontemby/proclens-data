@@ -620,7 +620,11 @@ const FLAGS={
   confidential:"The contract or its outputs carry confidentiality provisions",
   consultancy:"Reported as a consultancy — only where AusTender's weekly export or the historical extracts cover the contract, which leaves several years almost unflagged"
 };
-const DATA="./data/";
+/* Where the data is served from. Relative by default, which is GitHub Pages.
+   Set window.PROCLENS_DATA before this script to serve from elsewhere — an R2
+   bucket, say — without touching anything else. Do not change this until a
+   mirror has actually been verified readable: the whole site is this path. */
+const DATA=(typeof window!=="undefined"&&window.PROCLENS_DATA)||"./data/";
 /* Three registers, not one archive. They answer different questions and were
    written under different rules: the Commonwealth reports from $10,000 and names
    every supplier; NSW publishes awards over $150,000 under the GIPA Act, names
