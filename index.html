@@ -118,6 +118,13 @@ button:hover,select:hover{background:var(--tint)}
 .jurnote{font-size:12px;line-height:1.45;opacity:.85;max-width:60ch}
 .flag.jur{background:var(--ink);color:var(--paper);border-color:var(--ink)}
 .chan .pres{opacity:.72;font-style:italic}
+.agbtn{text-align:left}
+#agdlg .db h4{margin:18px 0 6px;font:700 13px/1.3 var(--mono);text-transform:uppercase;
+  letter-spacing:.06em;color:var(--muted)}
+#agdlg .db h4:first-child{margin-top:0}
+.agl{margin:0;padding-left:20px;font-size:13px;line-height:1.6}
+.agl li{margin-bottom:4px}
+.agkv{margin:0}
 .warn{display:block;margin-top:8px;padding:8px 10px;border:2px solid var(--pink);
   background:color-mix(in srgb, var(--pink) 10%, transparent);font-size:12px;
   line-height:1.5;max-width:86ch;color:var(--ink)}
@@ -536,6 +543,12 @@ html{touch-action:manipulation}
   <div class="db" id="about-b"></div>
 </dialog>
 
+<dialog id="agdlg" aria-labelledby="agdlg-t">
+  <div class="dh"><strong id="agdlg-t">Agency</strong>
+    <button class="closex" aria-label="Close" onclick="document.getElementById('agdlg').close()">✕</button></div>
+  <div class="db" id="agdlg-b"></div>
+</dialog>
+
 <dialog id="dlg" aria-labelledby="dlg-t">
   <div class="dh"><strong id="dlg-t">Contract</strong>
     <button class="closex" aria-label="Close" onclick="document.getElementById('dlg').close()">✕</button></div>
@@ -596,7 +609,7 @@ const JURISDICTIONS={
 const S={cidx:null,monthIx:null,months:new Map(),detail:new Map(),terms:new Map(),upd:null,updDetail:null,
   rows:[],view:[],sup:[],supView:[],supFilter:"",nswSup:undefined,page:0,sPage:0,PER:100,query:null,qRaw:"",searched:null,
   q:"",agency:"",sort:"pub",flags:new Set(),d1:"",d2:"",v1:null,v2:null,tab:"c",
-  jur:"cth",state:{nsw:new Map(),vic:new Map()},stateIdx:{},
+  jur:"cth",state:{nsw:new Map(),vic:new Map()},stateIdx:{},agIdx:undefined,audits:undefined,
   atm:new Map(),bi:new Map(),biIdx:undefined,atmRows:[],atmView:[],alerts:[],nPage:0,nStatus:"open",nWatch:"",nDesc:false};
 const $=s=>document.querySelector(s);
 const money=n=>n==null?"—":"$"+Math.round(n).toLocaleString("en-AU");
@@ -1559,7 +1572,7 @@ function draw(){
     return `<tr>
     <td class="t-title"><button class="linkbtn" data-cn="${esc(r.cn)}">${esc(r.title||"(untitled)")}</button>
       <div class="t-sub">${esc(r.cn||"")}</div></td>
-    <td class="t-party" data-th="Agency">${esc(r.buyer||"—")}</td>
+    <td class="t-party" data-th="Agency">${r.buyer?`<button class="linkbtn agbtn" data-agency="${esc(r.buyer)}">${esc(r.buyer)}</button>`:"—"}</td>
     <td class="t-party" data-th="Supplier">${esc(r.supplier||"—")}</td>
     <td class="num t-value" data-th="Value">${money(r.value)}${(r.cur||"AUD")!=="AUD"?" "+esc(r.cur):""}
       <div class="rule" title="${grew?"First seen at "+money(r.value_first):""}">
@@ -1662,6 +1675,63 @@ function drawSup(){
 
 /* Everything beyond the table row lives in the month's detail file, fetched
    the first time a contract from that month is opened. */
+/* Everything this archive holds about one agency, in one place. The roll-up is
+   precomputed by build.py; the audits are fetched once and matched on the
+   entity name the Auditor-General itself records, not on words in a title. */
+async function agencyData(){
+  if(S.agIdx===undefined){
+    S.agIdx=null;
+    try{ const r=await fetch(CORPUS+"agencies.json",{cache:"no-cache"});
+         if(r.ok) S.agIdx=new Map((await r.json()).agencies.map(a=>[a.name,a])); }catch(e){}
+  }
+  if(S.audits===undefined){
+    S.audits=null;
+    try{ const r=await fetch(DATA+"anao/audits.json",{cache:"no-cache"});
+         if(r.ok){ const j=await r.json(); S.audits=new Map();
+           for(const a of j.audits||[]){ if(!a.entity) continue;
+             if(!S.audits.has(a.entity)) S.audits.set(a.entity,[]);
+             S.audits.get(a.entity).push(a); } } }catch(e){}
+  }
+}
+async function openAgency(name){
+  const d=$("#agdlg"); $("#agdlg-t").textContent=name;
+  $("#agdlg-b").innerHTML='<p class="t-sub">Loading…</p>'; d.showModal();
+  await agencyData();
+  const a=S.agIdx&&S.agIdx.get(name);
+  if(!a){ $("#agdlg-b").innerHTML='<p class="t-sub">Nothing held for this agency.</p>'; return; }
+  const pct=(v)=>a.value?` <span class="t-sub">${(100*v/a.value).toFixed(1)}% of its spend</span>`:"";
+  const f=a.flags||{};
+  const row=(k,v)=>`<div><dt>${esc(k)}</dt><dd>${v}</dd></div>`;
+  let h=`<dl class="kv agkv">`+
+    row("Contracts",`${a.contracts.toLocaleString()} <span class="t-sub">${esc(fmtMY(a.first+"-01"))} to ${esc(fmtMY(a.last+"-01"))}</span>`)+
+    row("Committed",money(a.value))+
+    `</dl>`;
+  if((a.suppliers||[]).length)
+    h+=`<h4>Largest suppliers</h4><ol class="agl">`+a.suppliers.map(([n,c,v])=>
+      `<li><b>${esc(n)}</b> ${money(v)} <span class="t-sub">${c.toLocaleString()} contract${c===1?"":"s"}</span></li>`).join("")+`</ol>`;
+  if((a.arrangements||[]).length)
+    h+=`<h4>Bought under</h4><ol class="agl">`+a.arrangements.map(([n,c,v])=>
+      `<li><b>${esc(n)}</b> ${money(v)} <span class="t-sub">${c.toLocaleString()} contract${c===1?"":"s"}</span></li>`).join("")+`</ol>`;
+  // What this archive cannot say about this agency, stated as plainly as what it can.
+  const gaps=[];
+  if(f.product_not_named) gaps.push(`<b>${f.product_not_named[0].toLocaleString()}</b> of its contracts, ${money(f.product_not_named[1])},`+
+    ` describe nothing that was bought — only a category.${pct(f.product_not_named[1])}`);
+  if(f.value_contradicted) gaps.push(`<b>${f.value_contradicted[0].toLocaleString()}</b>, ${money(f.value_contradicted[1])}, carry a value another source contradicts by a hundredfold or more.`);
+  if(f.confidential) gaps.push(`<b>${f.confidential[0].toLocaleString()}</b>, ${money(f.confidential[1])}, carry confidentiality provisions.`);
+  if(gaps.length) h+=`<h4>What this archive cannot tell you</h4><ul class="agl">`+
+    gaps.map(g=>`<li>${g}</li>`).join("")+`</ul>`;
+  const au=(S.audits&&S.audits.get(name))||[];
+  h+=`<h4>Examined by the Auditor-General</h4>`;
+  h+= au.length
+    ? `<ol class="agl">`+au.slice(0,10).map(x=>
+        `<li><a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.title)}</a>`+
+        `<div class="t-sub">${esc(fmtDMY(x.published))}${x.report_no?` · report ${esc(x.report_no)}`:""}</div></li>`).join("")+
+      `</ol>${au.length>10?`<p class="t-sub">and ${au.length-10} more</p>`:""}`
+    : `<p class="t-sub">No performance audit in this index names this agency. The index holds `+
+      `every audit the Auditor-General has published; the match is on the entity each report `+
+      `records, not on words in its title.</p>`;
+  $("#agdlg-b").innerHTML=h;
+}
 function stateDialog(r){
   const j=JURISDICTIONS[r._jur];
   const sn=(S.stateIdx[r._jur]||{}).snapshot;
@@ -1698,6 +1768,8 @@ const yes=v=>/^(y|yes|true)$/i.test(String(v||"").trim());
 document.addEventListener("click",async e=>{
   const sb=e.target.closest("button[data-abn]");
   if(sb){ switchTab("c"); $("#q").value=sb.dataset.abn; S.qRaw=sb.dataset.abn; S.q=S.qRaw.toLowerCase(); runSearch(); return; }
+  const ab=e.target.closest("button[data-agency]");
+  if(ab){ openAgency(ab.dataset.agency); return; }
   const b=e.target.closest("button[data-cn]"); if(!b) return;
   const r=S.rows.find(x=>x.cn===b.dataset.cn); if(!r) return;
   $("#dlg-t").textContent=r.title||r.cn||"Contract";

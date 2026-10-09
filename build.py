@@ -715,6 +715,55 @@ def main():
         write_json_if_changed(os.path.join(out, "unspsc.json"), codes)
 
     agencies = Counter(r.get("buyer") for r in corpus.values() if r.get("buyer"))
+
+    # One roll-up per agency, precomputed because there is no server and a page
+    # that made a reader download the archive to answer "who does Defence buy
+    # from" would be the wrong page. Everything this archive has collected about
+    # an agency meets here: what it bought, from whom, under which arrangement,
+    # and what the record cannot say about it.
+    agg = defaultdict(lambda: {"n": 0, "v": 0.0, "first": "", "last": "",
+                               "sup": defaultdict(lambda: [0, 0.0]),
+                               "son": defaultdict(lambda: [0, 0.0]),
+                               "flags": Counter(), "flagv": defaultdict(float)})
+    for r in corpus.values():
+        b = (r.get("buyer") or "").strip()
+        if not b:
+            continue
+        a = agg[b]
+        v = r["value"] if isinstance(r.get("value"), (int, float)) else 0.0
+        a["n"] += 1
+        a["v"] += v
+        p = r.get("pub") or r.get("start") or ""
+        if p:
+            a["first"] = min(a["first"] or p, p)
+            a["last"] = max(a["last"], p)
+        sup = (r.get("supplier") or "").strip()
+        if sup:
+            a["sup"][sup][0] += 1
+            a["sup"][sup][1] += v
+        st = (r.get("son_title") or "").strip()
+        if st:
+            a["son"][st][0] += 1
+            a["son"][st][1] += v
+        for f in (r.get("flags") or "").split(","):
+            if f:
+                a["flags"][f] += 1
+                a["flagv"][f] += v
+    top = lambda d, k: sorted(([n] + list(c) for n, c in d.items()),
+                              key=lambda x: -x[2])[:k]
+    write_json_if_changed(os.path.join(out, "agencies.json"), {
+        "generated": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "note": "One record per buying agency, precomputed: totals, its largest suppliers "
+                "and arrangements, and how much of its spend carries each flag — including "
+                "the spend whose description names nothing that was bought.",
+        "agencies": [{
+            "name": b, "contracts": a["n"], "value": round(a["v"], 2),
+            "first": a["first"][:7], "last": a["last"][:7],
+            "suppliers": [[n, c, round(val, 2)] for n, c, val in top(a["sup"], 12)],
+            "arrangements": [[n, c, round(val, 2)] for n, c, val in top(a["son"], 8)],
+            "flags": {f: [n, round(a["flagv"][f], 2)] for f, n in a["flags"].most_common()},
+        } for b, a in sorted(agg.items(), key=lambda kv: -kv[1]["v"])],
+    })
     totals = {"contracts": len(corpus),
               "value_aud": round(sum(r["value"] for r in corpus.values()
                                      if isinstance(r.get("value"), (int, float))

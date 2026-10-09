@@ -134,6 +134,44 @@ def audits_on(page_html):
     return out
 
 
+FIELD = re.compile(r'field--name-field-report-(entity|portfolio|sector)\b(.{0,400}?)'
+                   r'(?=field--name-|</article>)', re.S)
+
+
+def detail(s, url):
+    """Who an audit examined, read from the report rather than guessed from its
+    title.
+
+    Matching an agency to an audit by the words in its name looked plausible and
+    was not: "Australian National Audit Office" took 338 audits because every
+    audit mentions auditing, and "System Administration" took 46 on the strength
+    of two ordinary words. The ANAO tags each report with the entity and
+    portfolio it covers, so the join is an exact name rather than an inference."""
+    out = {}
+    try:
+        t = s.get(url, timeout=120).text
+    except Exception:                                  # noqa: BLE001
+        return out
+    for name, blob in FIELD.findall(t):
+        parts = [x.strip() for x in
+                 html.unescape(re.sub(r"\s+", " ", re.sub(r"<[^>]+>", "|", blob))).split("|")
+                 if x.strip()]
+        # The block reads: css classes, the label, then the value.
+        vals = [x for x in parts if not x.startswith(("field--", "<", "class=")) 
+                and x.lower() not in ("entity", "portfolio", "sector") and len(x) > 3]
+        if vals:
+            out[name] = vals[0]
+    # An audit that covers the whole service is not an audit of one agency. The
+    # ANAO writes that a dozen ways — "Across Agency", "Across entities (listed
+    # below)", "NO-DEPTS-LISTED" — and attributing any of them to a single
+    # agency would put an audit on a page it does not belong to.
+    e = out.get("entity") or ""
+    if re.match(r"^\s*across\s|^no-depts-listed", e, re.I):
+        out["entity"] = None
+        out["scope"] = "Across agencies"
+    return out
+
+
 def collect(s):
     found, n = {}, 0
     while n < 40:
@@ -158,6 +196,9 @@ def main():
     ap = argparse.ArgumentParser(description="Index Auditor-General performance audits.")
     ap.add_argument("--out", default=os.path.join(DATA, "anao", "audits.json"))
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--entities", action="store_true",
+                    help="also read each audit's own page for the entity and portfolio it "
+                         "covers. Only audits that do not already have one are fetched.")
     args = ap.parse_args()
 
     s = requests.Session()
@@ -180,6 +221,16 @@ def main():
         if slug not in store:
             new += 1
         store[slug] = r
+    if args.entities:
+        need = [r for r in store.values() if not r.get("entity")]
+        print(f"reading {len(need):,} audit pages for the entity they cover", file=sys.stderr)
+        for i, r in enumerate(need, 1):
+            d = detail(s, r["url"])
+            r.update({k: v for k, v in d.items() if v})
+            if i % 50 == 0:
+                print(f"  {i}/{len(need)}", file=sys.stderr, flush=True)
+            time.sleep(PAUSE / 2)
+
     rows = sorted(store.values(), key=lambda r: (r.get("published") or "", r["slug"]), reverse=True)
 
     payload = {
@@ -190,7 +241,8 @@ def main():
         "source": INDEX,
         "totals": {"audits": len(rows), "new_this_run": new,
                    "with_a_report_number": sum(1 for r in rows if r.get("report_no")),
-                   "with_a_date": sum(1 for r in rows if r.get("published"))},
+                   "with_a_date": sum(1 for r in rows if r.get("published")),
+                   "with_an_entity": sum(1 for r in rows if r.get("entity"))},
         "audits": rows,
     }
     if args.dry_run:
