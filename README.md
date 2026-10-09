@@ -96,6 +96,59 @@ What updates itself, and what does not:
 | New South Wales | when an export is added — the platform answers only a browser |
 | Victoria | never; it is a snapshot |
 
+## What the record does not say
+
+A contract notice records what was paid and to whom. It has no field for the product, so a
+description can name a category and nothing else — *Platform as a Service (PaaS - Cloud)*,
+*Labour Hire*, *ICT Contractor Services*. **160,265 contracts, 12.1% of the archive and
+$113.1 billion, do exactly that**, and no search for a product will ever find them. Defence
+accounts for $54.2 billion of it.
+
+The test is the one `graph.py` applies to supplier names: strip the vocabulary common to
+every transaction and see whether anything survives. "Microsoft 365 E5 licences" survives;
+"Platform as a Service (PaaS - Cloud)" does not. Flagged `product_not_named`.
+
+This is the shape of the record, not a failing of any agency, and it is the ceiling on what
+vendor attribution can ever reach. The NDIA buys $235.7 million of Salesforce platform under
+that description; whatever runs on it is not public anywhere.
+
+## Agency pages
+
+Everything this archive holds about one buyer, in one place: what it bought, from whom,
+under which arrangements, what the Auditor-General has found, what it is funded to spend —
+and, stated as plainly as the rest, what the record cannot say about it. Defence reads
+528,794 contracts and $818.3 billion, and beneath that 42,598 contracts worth $54.2 billion
+describing nothing bought, 6.6% of its spend.
+
+Audits are joined on the entity the Auditor-General itself records, not on words in a title.
+Matching by title looked plausible and gave the ANAO 338 audits of itself, because every
+audit mentions auditing.
+
+## Analysis
+
+Four series about the record rather than the spending, because a dozen places chart what
+government spends and none chart how much of it can be read:
+
+- the share of each year's value whose description names nothing bought — **about 2% before
+  2020, 14.8% in 2023, 8.7% this year**
+- the share awarded without open competition
+- how much of a year's money went to its ten largest suppliers
+- the value published, with 2018 marked because two mistyped contracts put $244 billion in it
+
+Precomputed by the build and drawn as inline SVG. A charting library would weigh more than
+the rest of the page to draw four lines.
+
+## What is funded, as against what is contracted
+
+Portfolio Budget Statements, from data.gov.au: 212 agencies, 13,800 programme line items,
+nine budget years with forward estimates. The only forward-looking source here — everything
+else exists only once money is committed.
+
+Two things they are not. **Appropriations are not contracts**, and are never added to a
+contract total. And there is **no technology split in them**: the statements record
+programmes, so any digital-spend figure drawn from them is a judgement this archive has not
+made.
+
 ## Search
 
 A search does not download the archive. `build.py` writes an index mapping every word to
