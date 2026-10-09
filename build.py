@@ -751,6 +751,54 @@ def main():
                 a["flagv"][f] += v
     top = lambda d, k: sorted(([n] + list(c) for n, c in d.items()),
                               key=lambda x: -x[2])[:k]
+    # Series for the analysis view, precomputed because the page has no server
+    # and must not make a reader download the archive to draw a line. The
+    # questions worth asking of this data are about the record itself: is it
+    # getting more or less legible, more or less competed, more or less
+    # concentrated.
+    years = defaultdict(lambda: {"n": 0, "v": 0.0, "flags": Counter(), "flagv": defaultdict(float),
+                                 "sup": defaultdict(float)})
+    for r in corpus.values():
+        y = (r.get("pub") or "")[:4]
+        if not y.isdigit() or not ("1999" <= y <= str(date.today().year)):
+            continue
+        v = r["value"] if isinstance(r.get("value"), (int, float)) else 0.0
+        e = years[y]
+        e["n"] += 1
+        e["v"] += v
+        sup = (r.get("supplier") or "").strip()
+        if sup:
+            e["sup"][sup] += v
+        for f in (r.get("flags") or "").split(","):
+            if f:
+                e["flags"][f] += 1
+                e["flagv"][f] += v
+    series = []
+    for y in sorted(years):
+        e = years[y]
+        if e["n"] < 500:          # a year with almost nothing in it is noise on a chart
+            continue
+        top10 = sum(sorted(e["sup"].values(), reverse=True)[:10])
+        series.append({
+            "year": y, "contracts": e["n"], "value": round(e["v"], 2),
+            "top10_share": round(100 * top10 / e["v"], 2) if e["v"] else 0,
+            "shares": {f: round(100 * e["flagv"][f] / e["v"], 2) if e["v"] else 0
+                       for f in ("product_not_named", "limited_tender", "confidential",
+                                 "value_contradicted", "consultancy")},
+            "counts": {f: e["flags"].get(f, 0)
+                       for f in ("product_not_named", "limited_tender", "confidential",
+                                 "value_contradicted", "consultancy")},
+        })
+    write_json_if_changed(os.path.join(out, "series.json"), {
+        "generated": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "note": "One row per publication year: totals, the share of spend carrying each flag, "
+                "and how much of the year's money went to its ten largest suppliers. Shares "
+                "are of value, not of contract count. A flag whose source does not cover a "
+                "year reads near zero for that year and means nothing there — see the "
+                "coverage figures in index.json.",
+        "series": series,
+    })
+
     write_json_if_changed(os.path.join(out, "agencies.json"), {
         "generated": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "note": "One record per buying agency, precomputed: totals, its largest suppliers "

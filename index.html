@@ -128,6 +128,16 @@ button:hover,select:hover{background:var(--tint)}
 .chipgrp{flex-basis:100%;font:700 10px/1.6 var(--mono);text-transform:uppercase;
   letter-spacing:.08em;color:var(--muted);margin:6px 0 -2px}
 .chipgrp:first-child{margin-top:0}
+.chart{margin:0 0 26px;max-width:720px}
+.chart figcaption{font-size:13px;line-height:1.45;margin-bottom:6px}
+.chart figcaption .t-sub{display:block}
+.chart svg{width:100%;height:auto;overflow:visible}
+.gl{stroke:var(--line);stroke-width:1}
+.gp{fill:none;stroke:var(--pink);stroke-width:2.5;stroke-linejoin:round}
+.gd{fill:var(--ink)}
+.gy{fill:var(--muted);font:500 10px var(--mono);text-anchor:end}
+.gx{fill:var(--muted);font:500 10px var(--mono);text-anchor:middle}
+#charts{padding-top:4px}
 .warn{display:block;margin-top:8px;padding:8px 10px;border:2px solid var(--pink);
   background:color-mix(in srgb, var(--pink) 10%, transparent);font-size:12px;
   line-height:1.5;max-width:86ch;color:var(--ink)}
@@ -391,6 +401,7 @@ html{touch-action:manipulation}
     <div class="tabs" role="tablist">
       <button class="tab" role="tab" id="tab-c" aria-selected="true">Contracts</button>
       <button class="tab" role="tab" id="tab-s" aria-selected="false">Suppliers</button>
+      <button class="tab" role="tab" id="tab-a" aria-selected="false"><span class="tl">Analysis</span><span class="ts">Trends</span></button>
       <button class="tab" role="tab" id="tab-n" aria-selected="false"><span class="tl">Open
         tenders</span><span class="ts">Tenders</span><span class="dot" id="alertDot" hidden
         aria-hidden="true"></span></button>
@@ -518,6 +529,14 @@ html{touch-action:manipulation}
     <div id="moren" style="text-align:center;padding:16px"></div>
   </section>
 
+  <section id="pane-a" hidden>
+    <div class="note"><b>How the record itself is changing.</b> Not how much government
+      spends — a dozen places show that — but how much of its spending can be read. Shares
+      are of value, not of contract count, and a flag whose source does not cover a year
+      reads near zero there and means nothing.</div>
+    <div id="charts"></div>
+  </section>
+
   <section id="pane-s" hidden>
     <div class="note"><b>Grouped by ABN, not by name.</b> The same entity is
       published under several spellings, so a name-keyed total undercounts it.
@@ -619,7 +638,7 @@ const JURISDICTIONS={
             "so this archive does not take them."}
 };
 const S={cidx:null,monthIx:null,months:new Map(),detail:new Map(),terms:new Map(),upd:null,updDetail:null,
-  rows:[],view:[],sup:[],supView:[],supFilter:"",nswSup:undefined,page:0,sPage:0,PER:100,query:null,qRaw:"",searched:null,
+  rows:[],view:[],sup:[],supView:[],supFilter:"",nswSup:undefined,series:undefined,page:0,sPage:0,PER:100,query:null,qRaw:"",searched:null,
   q:"",agency:"",sort:"pub",flags:new Set(),d1:"",d2:"",v1:null,v2:null,tab:"c",
   jur:"cth",state:{nsw:new Map(),vic:new Map()},stateIdx:{},agIdx:undefined,audits:undefined,
   atm:new Map(),bi:new Map(),biIdx:undefined,atmRows:[],atmView:[],alerts:[],nPage:0,nStatus:"open",nWatch:"",nDesc:false};
@@ -1272,6 +1291,7 @@ function wire(){
   $("#aboutX").onclick=()=>$("#aboutDlg").close();
   $("#tab-c").onclick=()=>switchTab("c");
   $("#tab-s").onclick=()=>switchTab("s");
+  $("#tab-a").onclick=()=>switchTab("a");
   $("#tab-n").onclick=()=>switchTab("n");
   document.addEventListener("click",e=>{
     if(e.target.id==="aboutN") $("#about").click();
@@ -1305,11 +1325,12 @@ function wire(){
 function switchTab(t){
   S.tab=t;
   if(t!=="c") showResults(true);
-  for(const k of ["c","s","n"]){
+  for(const k of ["c","s","n","a"]){
     $("#tab-"+k).setAttribute("aria-selected",String(t===k));
     $("#pane-"+k).hidden=t!==k;
   }
   document.body.classList.toggle("notices",t==="n");
+  if(t==="a"){ showResults(true); drawAnalysis(); return; }
   if(t==="n"){ loadAtm(); applyAtm(); }
   else if(t==="s"){
     buildSupChips();
@@ -1718,6 +1739,53 @@ function drawSup(){
 /* An archive that lists only what it holds invites a reader to believe the rest
    does not exist. Every figure here is measured by the build, not written by
    hand, so the page cannot drift away from the data it describes. */
+/* Charts drawn as inline SVG from a precomputed series. A charting library
+   would weigh more than everything else on this page put together, to draw four
+   lines. */
+function lineChart(rows, key, opts){
+  const W=620, H=170, L=44, R=12, T=14, B=26;
+  const vals=rows.map(r=>opts.get(r));
+  const max=Math.max(...vals, opts.min_max||0)*1.12 || 1;
+  const x=i=>L+(W-L-R)*(rows.length<2?0.5:i/(rows.length-1));
+  const y=v=>T+(H-T-B)*(1-v/max);
+  const pts=vals.map((v,i)=>`${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
+  const ticks=[0,max/2,max].map(v=>
+    `<line x1="${L}" y1="${y(v)}" x2="${W-R}" y2="${y(v)}" class="gl"/>`+
+    `<text x="${L-6}" y="${y(v)+4}" class="gy">${opts.fmt(v)}</text>`).join("");
+  const xl=rows.map((r,i)=> (i%Math.ceil(rows.length/8)===0||i===rows.length-1)
+    ? `<text x="${x(i)}" y="${H-8}" class="gx">${esc(r.year)}</text>` : "").join("");
+  const dots=vals.map((v,i)=>`<circle cx="${x(i)}" cy="${y(v)}" r="2.5" class="gd">`+
+    `<title>${esc(rows[i].year)}: ${opts.fmt(v)}</title></circle>`).join("");
+  return `<figure class="chart"><figcaption><b>${esc(opts.title)}</b>`+
+    `<span class="t-sub">${esc(opts.sub||"")}</span></figcaption>`+
+    `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(opts.title)}">`+
+    `${ticks}<polyline points="${pts}" class="gp"/>${dots}${xl}</svg></figure>`;
+}
+async function drawAnalysis(){
+  const el=$("#charts");
+  if(S.series===undefined){
+    S.series=null; el.innerHTML='<p class="t-sub">Loading…</p>';
+    try{ const r=await fetch(CORPUS+"series.json",{cache:"no-cache"});
+         if(r.ok) S.series=(await r.json()).series; }catch(e){}
+  }
+  const rows=S.series;
+  if(!rows||!rows.length){ el.innerHTML='<p class="t-sub">No series available.</p>'; return; }
+  const pc=v=>v.toFixed(0)+"%";
+  const bn=v=>"$"+(v/1e9).toFixed(0)+"b";
+  el.innerHTML=
+    lineChart(rows,"u",{title:"Spend whose description names nothing that was bought",
+      sub:"share of each year's value · rose from about 2% before 2020 to 14.8% in 2023",
+      get:r=>r.shares.product_not_named, fmt:pc}) +
+    lineChart(rows,"l",{title:"Spend awarded without open competition",
+      sub:"share of each year's value carrying a limited-tender flag",
+      get:r=>r.shares.limited_tender, fmt:pc}) +
+    lineChart(rows,"c",{title:"Share of each year's money going to its ten largest suppliers",
+      sub:"concentration · the 2018 peak is two mistyped contracts worth $244bn, not a real year",
+      get:r=>r.top10_share, fmt:pc}) +
+    lineChart(rows,"v",{title:"Value published each year",
+      sub:"committed at award, not paid · 2018 carries the two concatenation errors",
+      get:r=>r.value, fmt:bn});
+}
 function coveragePage(){
   const t=(S.cidx&&S.cidx.totals)||{}, rep=(S.cidx&&S.cidx.report)||{};
   const pn=t.product_not_named||{}, cd=t.contradicted||{};
