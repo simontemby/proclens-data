@@ -335,6 +335,11 @@ td{padding:11px 10px;vertical-align:top}
 /* Value, agency, sort and the review flags describe awarded contracts, so the
    notices tab shows only the controls that apply to it. */
 body.notices #grp-value,body.notices #agency,body.notices #sort,body.notices #chips{display:none}
+/* The analysis view is the whole archive by definition, so every filter is
+   inert on it. Offering a control that cannot do anything is worse than not
+   offering it. */
+body.analysis .searchrow,body.analysis .jurrow,body.analysis #count,
+body.analysis #bgstat,body.analysis #prog{display:none}
 .n-open{color:var(--ink);font-weight:700}
 .n-soon{color:var(--ink);font-weight:700;background:var(--tint);padding:1px 5px;border:1.5px solid var(--pink-ink)}
 .n-closed{color:var(--muted);text-decoration:line-through;text-decoration-color:var(--pink)}
@@ -962,7 +967,7 @@ async function runSearch(){
   await ensureMonths(months);
   if(seq===searchSeq) reapply();
 }
-const reapply=()=>S.tab==="s"?applySup():S.tab==="n"?applyAtm():apply();
+const reapply=()=>S.tab==="s"?applySup():S.tab==="n"?applyAtm():S.tab==="a"?drawAnalysis():apply();
 
 async function boot(){
   let idx=null;
@@ -1337,6 +1342,7 @@ function switchTab(t){
     $("#pane-"+k).hidden=t!==k;
   }
   document.body.classList.toggle("notices",t==="n");
+  document.body.classList.toggle("analysis",t==="a");
   if(t==="a"){ showResults(true); drawAnalysis(); return; }
   if(t==="n"){ loadAtm(); applyAtm(); }
   else if(t==="s"){
@@ -1566,6 +1572,12 @@ function showResults(on){
 }
 function apply(){
   if(S.tab==="s") return applySup();
+  // The analysis view has no contract list to filter: its series are
+  // precomputed across the whole archive. Falling through to the contracts
+  // path here called showResults(hasQuery()), which with no query hid the
+  // results and showed the landing — clicking a flag chip appeared to throw
+  // the reader back to the home page.
+  if(S.tab==="a") return drawAnalysis();
   showResults(hasQuery());
   const qq=S.query;
   S.view=S.rows.filter(r=>{
