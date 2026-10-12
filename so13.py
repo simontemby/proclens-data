@@ -30,7 +30,7 @@ Two things make this data BETTER than AusTender for value questions:
 
     python so13.py --out data/so13
 """
-import argparse, io, json, os, re, sys
+import argparse, hashlib, io, json, os, re, sys
 from datetime import datetime, timezone
 
 import requests
@@ -224,16 +224,83 @@ def map_columns(cols):
     return idx
 
 
+# A number that is grouped in thousands, taken whole: "4,150,000", "1.2",
+# "$407,806.00". Anchored so the groups after the first must each be three
+# digits, which is what tells a real amount from a cell pdfplumber cut in half.
+MONEY_RE = re.compile(r"-?\$?\s*(\d{1,3}(?:,\d{3})*|\d+)(\.\d+)?")
+
+
 def as_money(v):
+    """The amount a cell states, or None when it states none.
+
+    Stripping every character that is not a digit and reading what is left ran
+    separate numbers together. A CEFC row reading
+
+        4,150,000 (Part of CEFC's $50,000,000 commitment to invest in ...)
+
+    became $415,000,050,000,000 — four hundred and fifteen trillion dollars
+    against a farming trust. The first well-formed amount is the consideration;
+    anything after it is narrative about a larger facility.
+
+    A cell the extractor truncated mid-number, like "3,455,0", is refused rather
+    than read as $34,550: a wrong amount is worse than a missing row, and the
+    dropped row is counted where the caller can see it.
+
+    What a cell means by its number — dollars or millions — is settled later, by
+    redenominate(), because the publisher's own column heading does not say."""
     if isinstance(v, (int, float)):
         return round(float(v), 2)
-    if not v:
+    s = str(v or "").strip()
+    if not s:
         return None
-    s = re.sub(r"[^0-9.\-]", "", str(v))
+    m = MONEY_RE.match(s)
+    if not m:
+        m = MONEY_RE.search(s)
+        if not m or re.search(r"\d", s[:m.start()]):
+            return None       # digits before the first amount: not an amount cell
+    tail = s[m.end():]
+    if re.match(r"\s*,?\d", tail):
+        return None           # the number keeps going, so this one is incomplete
     try:
-        return round(float(s), 2)
+        return round(float(m.group(0).replace("$", "").replace(",", "").strip()), 2)
     except ValueError:
         return None
+
+
+# An amount below this cannot be a contract reported under an Order that covers
+# consideration of $100,000 or more, so it is read as millions. See
+# redenominate() for why the threshold sits here and not at the floor itself.
+MILLIONS_BELOW = 1_000
+
+
+def redenominate(rows):
+    """Rows whose amounts are stated in millions, converted to dollars.
+
+    The CEFC reports its investment contracts in millions, and its own column
+    heading cannot be relied on to say so: the 2017 listing heads the column
+    "Amount of consideration" and writes 4.3 for a $4.3 million investment, while
+    the 2025 listing heads it "($ million)" and writes 1,250,000,000 in full.
+    Reading the heading gave $4.30 one way and $1.25 quadrillion the other.
+
+    So the figures are read against the floor the Order sets. Every listing states
+    that it covers contracts providing for consideration of $100,000 or more, so
+    an amount under a thousand dollars cannot be one: $295 is $295 million, and
+    $1.20 is $1.2 million. Across all 34,381 amounts the archive holds under this
+    Order, 34,005 are at or above $100,000 and 368 are under $1,000 — the gap
+    between them is empty, which is what makes the reading safe. The eight in
+    between are left alone: Comcover insurance at $91,345 and CSIRO cleaning at
+    $95,876.88 are entities reporting a little below the floor, which they may do.
+
+    Returns the rows and how many were converted, for the caller to record."""
+    n = 0
+    for r in rows:
+        v = r.get("value")
+        if isinstance(v, (int, float)) and 0 < v < MILLIONS_BELOW:
+            for k in ("value", "value_first"):
+                if isinstance(r.get(k), (int, float)):
+                    r[k] = round(r[k] * 1_000_000, 2)
+            n += 1
+    return rows, n
 
 
 def as_date(v):
@@ -266,7 +333,7 @@ def parse_pdf(blob, entity, period, url):
     a wrong supplier against a real amount, which is worse than a missing row."""
     if pdfplumber is None:
         sys.exit("so13.py needs pdfplumber for PDF listings: pip install pdfplumber")
-    out, idx, dropped = [], None, 0
+    out, idx, dropped, rescaled = [], None, 0, 0
     with pdfplumber.open(io.BytesIO(blob)) as pdf:
         for page in pdf.pages:
             for table in page.extract_tables():
@@ -282,12 +349,19 @@ def parse_pdf(blob, entity, period, url):
                     continue              # a table before any header is not a listing
                 else:
                     body = rows
+                got = []
                 for r in body:
                     row = build_row(r, idx, entity, period, url)
                     if row is None:
                         dropped += 1
                     else:
-                        out.append(row)
+                        got.append(row)
+                got, n = redenominate(got)
+                rescaled += n
+                out.extend(got)
+    if rescaled:
+        print(f"    {rescaled} amount(s) under ${MILLIONS_BELOW:,} read as millions",
+              file=sys.stderr)
     if dropped:
         print(f"    {dropped} row(s) dropped: no readable amount", file=sys.stderr)
     return out
@@ -368,6 +442,7 @@ def parse_xlsx(blob, entity, period, url):
             "period": period,
             "source_url": url,
         })
+    out, _ = redenominate(out)
     return out
 
 
@@ -404,7 +479,14 @@ def main():
             if not rows:
                 print(f"  ! {f['label']}: no rows parsed", file=sys.stderr)
                 continue
-            name = f"{src['short']}-{f['period']}.json"
+            # An entity can publish two listings covering one period: the CEFC
+            # reports each half year, and period_of resolves both to the same
+            # calendar year. Naming a shard after its period alone made the
+            # second overwrite the first and five CEFC listings were lost that
+            # way, so the name carries a digest of the document it came from.
+            # One listing, one URL, one file, whatever the period is called.
+            digest = hashlib.sha1(f["url"].encode()).hexdigest()[:6]
+            name = f"{src['short']}-{f['period']}-{digest}.json"
             path = os.path.join(args.out, name)
             payload = {"entity": src["entity"], "period": f["period"],
                        "source_url": f["url"], "label": f["label"],
@@ -426,6 +508,49 @@ def main():
                              "total": round(val, 2), "source_url": f["url"]})
             total += len(rows)
             print(f"  {f['period']}: {len(rows)} contracts, ${val:,.0f}", file=sys.stderr)
+
+    # The manifest is what a reader sees when they ask where a number came from,
+    # so it must describe the store rather than the run. A run that reached the
+    # CSIRO page once and failed the next time published an index naming a single
+    # listing while twelve of its shards sat on disk: 26,255 contracts the archive
+    # held and disclaimed. Each shard records its own entity, period and source,
+    # so a listing this run did not reach is restated from the shard instead.
+    #
+    # Nothing is deleted here. A listing withdrawn from an entity's page is the
+    # thing this archive exists to keep, and load_so13() keys contracts on who,
+    # when and how much, so a superseded shard cannot double-count.
+    named = {m["file"] for m in manifest}
+    seen_urls = {m.get("source_url") for m in manifest}
+    for name in sorted(os.listdir(args.out)):
+        if not name.endswith(".json") or name == "index.json" or name in named:
+            continue
+        try:
+            with open(os.path.join(args.out, name)) as fh:
+                shard = json.load(fh)
+        except (OSError, ValueError):
+            continue
+        rows, fields = shard.get("rows") or [], shard.get("fields") or []
+        if not rows:
+            continue
+        if shard.get("source_url") in seen_urls:
+            # The same document under an older name. Shard names used to be
+            # derived from the period, so a renaming left a second copy behind;
+            # it is the same listing, so the duplicate goes rather than being
+            # counted twice in the index.
+            print(f"  superseded copy of {shard.get('source_url', '')[-40:]}: "
+                  f"removing {name}", file=sys.stderr)
+            os.remove(os.path.join(args.out, name))
+            continue
+        vi = fields.index("value") if "value" in fields else None
+        val = sum(r[vi] for r in rows
+                  if vi is not None and isinstance(r[vi], (int, float)))
+        manifest.append({"entity": shard.get("entity"), "short": name.split("-")[0],
+                         "period": shard.get("period") or "unknown", "file": name,
+                         "count": len(rows), "total": round(val, 2),
+                         "source_url": shard.get("source_url"), "carried": True})
+        named.add(name)
+        seen_urls.add(shard.get("source_url"))
+        total += len(rows)
 
     manifest.sort(key=lambda m: (m["short"], m["period"]), reverse=True)
     with open(os.path.join(args.out, "index.json"), "w") as fh:
