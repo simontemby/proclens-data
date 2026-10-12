@@ -363,6 +363,20 @@ python -m http.server 8765                 # then open http://localhost:8765
 counts. Use it before trusting the mapper: four of its field mappings were wrong at
 first, and the buyer column was showing the supplier.
 
+## Checking a build
+
+`python check.py` asserts what must be true of the archive and names the number
+that broke it: an amount below a floor its own source sets, a value in the
+billions with nothing agreeing, a store that has lost most of its rows,
+attribution that has stopped being mostly read. Every workflow that writes a
+store runs it before committing, so a build that fails is not published. It
+found three live defects on the day it was written.
+
+`python tools/reachability.py` asks each source whether it will answer this
+machine and reports the refusal in the words of whatever is refusing. The three
+sources collected by hand do not refuse for the same reason, which is the
+subject of [docs/runners.md](docs/runners.md).
+
 ## Deployment
 
 See [DEPLOY.md](DEPLOY.md).

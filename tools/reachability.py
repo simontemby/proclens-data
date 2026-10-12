@@ -9,16 +9,27 @@ anything outside Australia, and the usual remedy is an Australian VM. That is
 worth testing before anybody rents one, because the three do not refuse for the
 same reason:
 
-    this machine, Cloudflare exit in Australia (a datacentre address)
-        ANAO       403   Akamai: "a high volume of simultaneous submissions
-                         from your network"
-        Victoria   200
-        buy.nsw    200
+                            an Australian         a GitHub runner,
+                            datacentre address    US, HTTP / browser
+        ANAO                403 Akamai            403 Akamai / 403 Akamai
+        Victorian register  200                   403 Cloudflare / 403
+        buy.nsw             200                   200 / 200
+        AusTender (control) 200                   200 / 200
 
-An Australian address was not enough for the ANAO and was not needed by the
-other two. So the question an Australian VM answers is not "is it in Australia"
-but "does this particular network have a reputation", and the only way to know
-is to run this from the machine in question.
+Three things that were assumed, and are not so:
+
+  - buy.nsw answers a GitHub runner perfectly well. Whatever keeps that
+    collection manual, it is not the site refusing.
+  - The Victorian register refuses the United States and answers Australia, so
+    for that one source an Australian machine is the whole answer.
+  - The Auditor-General refuses both, and refuses a real Chromium from the same
+    runner exactly as it refuses a plain client. It is reading the address, not
+    the client, so a browser is not the way in. Whether it would accept a
+    dedicated Australian address is open: the one tested here was a shared
+    consumer VPN exit, and Akamai's own words were "a high volume of
+    simultaneous submissions from your network", which is what a shared address
+    earns. That is the question to settle by running this on the machine
+    itself, before trusting it with a collection.
 
 Run it anywhere — a laptop, a VM, a GitHub runner:
 
@@ -53,8 +64,8 @@ SOURCES = [
 # What a refusal is, in the words of the thing refusing. A 403 from Akamai and a
 # 403 from Cloudflare call for different answers, and "403" alone calls for none.
 TELLS = [
-    (r"Akamai|Reference Number: \d+\.\w+", "Akamai bot management — blocked on the "
-     "network's reputation, so another datacentre will most likely be blocked too"),
+    (r"Akamai|Reference Number: \d+\.\w+", "Akamai bot management — judging the "
+     "address, not the client: a real browser from the same machine is refused too"),
     (r"x-amzn-waf-action|awswaf", "AWS WAF challenge — needs a browser to solve it"),
     (r"Just a moment|cf-mitigated|Cloudflare", "Cloudflare interstitial — needs a "
      "browser to solve it"),
