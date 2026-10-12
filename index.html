@@ -439,6 +439,7 @@ html{touch-action:manipulation}
         <span class="badge" id="filterCount" hidden>0</span></button>
     </div>
     <div class="chiprow jurrow" id="jurrow" role="group" aria-label="Jurisdiction"></div>
+    <div id="stale" role="status" hidden></div>
     <p class="count" id="count" role="status" aria-live="polite">Loading archive…</p>
     <p class="count" id="bgstat" aria-live="polite" style="padding-top:2px"></p>
     <progress id="prog" max="100" value="0" hidden></progress>
@@ -1052,6 +1053,8 @@ async function boot(){
       `</small></dd></div>`;
   }).join("");
   buildAgencies(); buildChips(); buildJur(); wire();
+  // Not awaited: the banner is one small file and must never hold up the page.
+  stalenessBanner();
   await ensureMonths(monthsFor(S.d1,S.d2));
   // No automatic full download. When search needed the whole archive in memory
   // it made sense to start fetching it on load; now a search fetches only the
@@ -1489,6 +1492,38 @@ function coverageWarning(){
       `those contracts were not consultancies — only that this archive cannot tell.`);
   }
   return out.length?`<div class="warn">${out.join("<br>")}</div>`:"";
+}
+/* A static archive cannot tell a reader it has stopped being updated. The page
+   renders whatever is committed, as confidently as if it had arrived this
+   morning, and a workflow that fails sends one email to one maintainer. So the
+   build writes down how old each store is and the page says so here — the only
+   check that does not depend on somebody looking.
+
+   The cadence is how long the source itself can plausibly go without
+   publishing, not how often this archive polls it. AusTender releases a Senate
+   Order snapshot twice a year, so a snapshot store that last changed six weeks
+   ago is working as intended; saying otherwise teaches a reader to ignore the
+   warning. */
+async function stalenessBanner(){
+  let f=null;
+  try{
+    const r=await fetch(DATA+"freshness.json",{cache:"no-cache"});
+    if(r.ok) f=await r.json();
+  }catch(e){}
+  const el=$("#stale"); if(!el) return;
+  const bad=((f&&f.stores)||[]).filter(s=>s.overdue||s.missing);
+  if(!bad.length){ el.hidden=true; el.innerHTML=""; return; }
+  const say=s=>s.missing
+    ?`<b>${esc(s.label)}</b> is not in this build at all`
+    :`<b>${esc(s.label)}</b> last changed ${s.days_old.toLocaleString()} days ago, `+
+     `against a source that publishes at least every ${s.cadence_days}`;
+  el.innerHTML=`<div class="warn">`+
+    `${bad.length===1?"One register has":`${bad.length} registers have`} stopped `+
+    `arriving: ${bad.map(say).join("; ")}. `+
+    `Everything else on this page is as current as its register. `+
+    `<a href="https://github.com/simontemby/proclens-data/actions" rel="noopener">`+
+    `The collection runs are public.</a></div>`;
+  el.hidden=false;
 }
 function applyAtm(){
   showResults(true);

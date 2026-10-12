@@ -40,6 +40,12 @@ jobs:
       - name: Parse the exports
         run: python nsw.py --raw data/nsw/raw --out data/nsw
 
+      # The stores this job writes are read straight by the site, so they are
+      # asserted before anything is committed: a store that has lost most of its
+      # rows has broken rather than shrunk, and an amount below the floor its
+      # own source sets is a denomination misread, not a cheap contract.
+      - name: Assert what must be true
+        run: python check.py
       - name: Say how fresh it is
         run: |
           python - <<'PY' >> $GITHUB_STEP_SUMMARY

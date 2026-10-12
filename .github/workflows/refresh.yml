@@ -106,6 +106,7 @@ jobs:
             done
             echo "backfill loop finished"
             python build.py
+            python check.py
             save "Corpus rebuilt after backfill $(date -u +%F)"
           else
             sync
@@ -114,5 +115,6 @@ jobs:
             # of Actions minutes.
             python refresh.py --since-days 21 --workers 4
             python build.py
+            python check.py
             save "Archive refresh $(date -u +%F)"
           fi

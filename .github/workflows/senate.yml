@@ -52,6 +52,13 @@ jobs:
       # file changes nothing a reader can see until the corpus is rebuilt.
       - run: python build.py
         if: steps.guard.outputs.skip != 'true'
+      # A build that fails its own assertions is not committed. Publishing a
+      # wrong number is worse than publishing yesterday's, and the checks only
+      # fail on a fault: an amount under a floor the source itself sets, a value
+      # in the billions with no second source agreeing, a store that has lost
+      # most of its rows, attribution that has stopped being mostly read.
+      - run: python check.py
+        if: steps.guard.outputs.skip != 'true'
       - name: Commit snapshots
         if: steps.guard.outputs.skip != 'true'
         run: |

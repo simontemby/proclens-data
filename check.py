@@ -165,6 +165,24 @@ def check_so13_floor():
                  f"sentence about a larger facility read as one number")
 
 
+def check_freshness():
+    """What the build wrote down about its own age.
+
+    A store past its cadence is reported but does not fail the run: a source
+    that has gone quiet is news, not a reason to stop publishing everything
+    else. The site says so itself through the banner this file feeds."""
+    f = build.read_json(os.path.join(DATA, "freshness.json"), None)
+    if not f:
+        fail("no freshness.json; the site cannot tell a reader how old it is")
+        return
+    for s in f.get("stores", []):
+        if s.get("missing"):
+            note(f"{s['label']} is not in this build at all")
+        elif s.get("overdue"):
+            note(f"{s['label']} last changed {s['days_old']} days ago, against a "
+                 f"source that publishes at least every {s['cadence_days']}")
+
+
 def check_search(idx):
     """The index and the page must tokenise identically. A word indexed one way
     and matched another sends a reader to a month and shows them nothing."""
@@ -194,6 +212,7 @@ def main():
     t = check_corpus(idx)
     check_sources(t)
     check_so13_floor()
+    check_freshness()
     check_search(idx)
 
     for n in NOTES:

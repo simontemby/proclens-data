@@ -53,6 +53,12 @@ jobs:
         if: steps.guard.outputs.skip != 'true'
         run: python budget.py --out data/budget/programs.json
 
+      # The stores this job writes are read straight by the site, so they are
+      # asserted before anything is committed: a store that has lost most of its
+      # rows has broken rather than shrunk, and an amount below the floor its
+      # own source sets is a denomination misread, not a cheap contract.
+      - name: Assert what must be true
+        run: python check.py
       - name: Commit
         if: steps.guard.outputs.skip != 'true'
         run: |

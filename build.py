@@ -674,6 +674,66 @@ def write_corpus(corpus, out, compact):
     return months, {"rows": len(upd_l), "sha": usha}, compact
 
 
+# Every store, what it is called on the site, and how long it may go without
+# changing before something is wrong.
+#
+# The number is a fact about the source, not about how often it is polled. The
+# Senate Order snapshot job runs every Tuesday and succeeds every Tuesday, but
+# AusTender publishes a snapshot twice a year, so a store that last changed six
+# weeks ago is working exactly as intended. Measuring the poll instead of the
+# publication called that store overdue on the day this file was written, which
+# is the kind of warning a reader learns to ignore.
+#
+# None means the source is collected by hand, so no age is a fault.
+STORES = [
+    ("corpus/index.json",      "Commonwealth contracts",       10),
+    ("export/index.json",      "Weekly contract export",       14),
+    ("atm/index.json",         "Open tenders",                  7),
+    ("buyict/index.json",      "BuyICT opportunities",          7),
+    ("son/arrangements.json",  "Standing offers",              14),
+    ("senate/index.json",      "Senate order snapshots",      240),
+    ("so13/index.json",        "Senate Order 13 listings",    120),
+    ("budget/programs.json",   "Portfolio Budget Statements", 240),
+    ("nsw/index.json",         "New South Wales contracts",  None),
+    ("vic/index.json",         "Victorian contracts",        None),
+    ("anao/audits.json",       "Auditor-General audits",     None),
+]
+
+
+def write_freshness():
+    """When each store was last written, so the site can say so itself.
+
+    A static archive cannot tell a reader it has stopped being updated: the page
+    renders whatever is committed, as confidently as if it arrived this morning.
+    A failed workflow sends one email to one maintainer and the site says
+    nothing. So the build records what it found in the directory, and the page
+    reads it and warns — the one check that does not depend on anybody looking."""
+    today = datetime.now(timezone.utc).date()
+    out = []
+    for path, label, cadence in STORES:
+        d = read_json(os.path.join(DATA, path), None)
+        gen = (d or {}).get("generated") or (d or {}).get("collected") or ""
+        age = None
+        if gen[:10]:
+            try:
+                age = (today - date.fromisoformat(gen[:10])).days
+            except ValueError:
+                pass
+        out.append({"path": path, "label": label, "cadence_days": cadence,
+                    "generated": gen or None, "days_old": age,
+                    "overdue": bool(cadence and age is not None and age > cadence),
+                    "missing": d is None})
+    write_json_if_changed(os.path.join(DATA, "freshness.json"), {
+        "generated": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "note": "How long it is since each store last changed, written by the "
+                "build so the site can say so without anybody asking. The cadence "
+                "is how long the source itself can plausibly go without "
+                "publishing, so a store past it has stopped arriving rather than "
+                "merely being quiet.",
+        "stores": out,
+    })
+
+
 def main():
     ap = argparse.ArgumentParser(description="Build the deduplicated corpus and search index.")
     ap.add_argument("--out", default=os.path.join(DATA, "corpus"))
@@ -862,6 +922,7 @@ def main():
         "terms": term_shas, "totals": totals, "flag_counts": dict(flag_counts),
         "agencies": agencies.most_common(), "report": report,
     })
+    write_freshness()
     print(json.dumps({k: v for k, v in report.items() if k != "cn_collision_sample"}, indent=1),
           file=sys.stderr)
 
