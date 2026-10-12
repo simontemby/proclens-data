@@ -1,0 +1,27 @@
+# Which sources answer a GitHub runner, and which refuse it.
+#
+# Three sources this archive wants are collected by hand because they refuse
+# these runners. Before renting a machine somewhere else to do the collecting,
+# it is worth knowing what each one is actually refusing: a block that names a
+# bot manager is judging the network's reputation and will refuse the next
+# datacentre too, while one that simply never answers from here may only be
+# refusing the United States.
+#
+# Run it by hand from the Actions tab. It writes nothing and ingests nothing.
+name: Reachability
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Ask each source whether it will answer this runner
+        run: python tools/reachability.py || true
