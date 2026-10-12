@@ -25,3 +25,13 @@ jobs:
           python-version: "3.12"
       - name: Ask each source whether it will answer this runner
         run: python tools/reachability.py || true
+
+      # A plain HTTP client and a real browser are refused for different
+      # reasons. If a bot manager is reading the TLS handshake and the header
+      # order rather than the address, a browser driven from this same runner
+      # gets through and no machine needs to be rented at all.
+      - name: Ask again, from a real browser on the same runner
+        run: |
+          pip install playwright
+          playwright install --with-deps chromium
+          python tools/reachability.py --browser || true

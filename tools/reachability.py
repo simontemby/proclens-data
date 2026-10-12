@@ -87,9 +87,33 @@ def why(body, headers):
     return ""
 
 
+def probe_browser(url, timeout=45):
+    """The same question asked by a real browser.
+
+    A bot manager has two things to judge: where the request came from and what
+    sent it. A plain HTTP client loses on the second whatever its User-Agent
+    says, because the TLS handshake and the order of the headers give it away.
+    If a browser on this same machine is let through, the address was never the
+    problem and no machine needs to be rented."""
+    from playwright.sync_api import sync_playwright
+    with sync_playwright() as p:
+        b = p.chromium.launch()
+        page = b.new_page(locale="en-AU", user_agent=UA)
+        try:
+            r = page.goto(url, timeout=timeout * 1000, wait_until="domcontentloaded")
+            body = page.content()
+            return (r.status if r else None), body[:40000], dict(r.headers if r else {})
+        except Exception as e:
+            return None, f"{type(e).__name__}: {e}", {}
+        finally:
+            b.close()
+
+
 def main():
     ap = argparse.ArgumentParser(description="Which sources answer this machine.")
     ap.add_argument("--json", action="store_true", help="machine-readable output")
+    ap.add_argument("--browser", action="store_true",
+                    help="ask with a real browser instead of an HTTP client")
     args = ap.parse_args()
 
     where = {}
@@ -100,11 +124,12 @@ def main():
         pass
     here = (f"{where.get('ip', '?')}  {where.get('country', '?')}  "
             f"{where.get('org', 'network unknown')}")
-    print(f"From {here}\n", file=sys.stderr)
+    how = "a real browser" if args.browser else "an HTTP client"
+    print(f"From {here}\nAsking as {how}\n", file=sys.stderr)
 
     rows, refused = [], 0
     for name, url, what in SOURCES:
-        status, body, headers = probe(url)
+        status, body, headers = (probe_browser(url) if args.browser else probe(url))
         ok = status == 200 and len(body) > 2000
         # No status at all means nothing answered: a timeout or a reset, which
         # is its own kind of refusal and the one that says least. The exception
