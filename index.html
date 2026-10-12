@@ -119,6 +119,11 @@ button:hover,select:hover{background:var(--tint)}
 .flag.jur{background:var(--ink);color:var(--paper);border-color:var(--ink)}
 .chan .pres{opacity:.72;font-style:italic}
 .grp{color:var(--muted)}
+.agidxl{columns:2;column-gap:28px}
+.agidxl li{break-inside:avoid}
+#agq{width:100%;margin-bottom:10px}
+@media (max-width:640px){.agidxl{columns:1}}
+.perma{font-size:11px;word-break:break-all;background:var(--band);padding:2px 5px;border-radius:3px}
 .agbtn{text-align:left}
 #agdlg .db h4{margin:18px 0 6px;font:700 13px/1.3 var(--mono);text-transform:uppercase;
   letter-spacing:.06em;color:var(--muted)}
@@ -412,6 +417,8 @@ html{touch-action:manipulation}
         tenders</span><span class="ts">Tenders</span><span class="dot" id="alertDot" hidden
         aria-hidden="true"></span></button>
     </div>
+    <button class="iconbtn" id="agenciesBtn" aria-label="Agencies" title="Agencies">
+      <span class="ico" aria-hidden="true">▤</span><span class="lbl">Agencies</span></button>
     <button class="iconbtn" id="gaps" aria-label="What this archive cannot see"
             title="What this archive cannot see">
       <span class="ico" aria-hidden="true">◴</span><span class="lbl">Gaps</span></button>
@@ -572,6 +579,16 @@ html{touch-action:manipulation}
   <div class="dh"><strong id="about-t">About this archive</strong>
     <button class="closex" id="aboutX" aria-label="Close">✕</button></div>
   <div class="db" id="about-b"></div>
+</dialog>
+
+<dialog id="agidx" aria-labelledby="agidx-t">
+  <div class="dh"><strong id="agidx-t">Agencies</strong>
+    <button class="closex" aria-label="Close" onclick="document.getElementById('agidx').close()">✕</button></div>
+  <div class="db">
+    <label class="skip" for="agq">Find an agency</label>
+    <input id="agq" type="search" placeholder="Find an agency…" autocomplete="off">
+    <div id="agidx-b"></div>
+  </div>
 </dialog>
 
 <dialog id="covdlg" aria-labelledby="covdlg-t">
@@ -1261,6 +1278,7 @@ function wire(){
   $("#csv").onclick=exportCSV;
   // The two standing notes are worth keeping but not worth the top of the page.
   $("#gaps").onclick=coveragePage;
+  $("#agenciesBtn").onclick=agencyIndex;
   $("#about").onclick=()=>{
     const a=S.atmIdx;
     $("#about-b").innerHTML=
@@ -1904,8 +1922,55 @@ async function agencyData(){
              S.audits.get(a.entity).push(a); } } }catch(e){}
   }
 }
-async function openAgency(name){
-  const d=$("#agdlg"); $("#agdlg-t").textContent=name;
+/* Until now nothing here could be linked to. A reader could find a contract and
+   had no way to send anyone to it, which for an archive meant for citing was a
+   real gap. The address bar now carries what is open, and an address that
+   arrives from outside opens it. Hash routing, because GitHub Pages serves
+   static files and cannot rewrite paths. */
+function route(kind, id){
+  const want = kind ? `#${kind}/${encodeURIComponent(id)}` : "";
+  if(location.hash !== want){
+    history.replaceState(null, "", want || location.pathname + location.search);
+  }
+}
+async function openRoute(){
+  const m = /^#(cn|agency)\/(.+)$/.exec(location.hash || "");
+  if(!m) return;
+  const [,kind,raw] = m, id = decodeURIComponent(raw);
+  if(kind === "agency") return openAgency(id, true);
+  // A contract may be in a month nobody has loaded. Searching for its ID is how
+  // the archive already finds one, so the link reuses that rather than
+  // inventing a second path to the same row.
+  $("#q").value = id; S.qRaw = id; S.q = id.toLowerCase();
+  await runSearch();
+  const r = S.rows.find(x => String(x.cn).toLowerCase() === id.toLowerCase());
+  if(r) openContract(r, true);
+}
+/* Agency pages were reachable only by finding a contract that happened to name
+   one. An archive that has something to say about 241 buyers should let a
+   reader ask for one by name. */
+async function agencyIndex(){
+  $("#agidx").showModal();
+  const box=$("#agidx-b");
+  box.innerHTML='<p class="t-sub">Loading…</p>';
+  await agencyData();
+  const all=S.agIdx?[...S.agIdx.values()]:[];
+  if(!all.length){ box.innerHTML='<p class="t-sub">No agency roll-up available.</p>'; return; }
+  const draw=()=>{
+    const q=($("#agq").value||"").trim().toLowerCase();
+    const rows=all.filter(a=>!q||a.name.toLowerCase().includes(q)).slice(0,250);
+    box.innerHTML=`<p class="t-sub">${all.length.toLocaleString()} agencies, largest first`+
+      `${q?` · ${rows.length} matching`:""}</p><ol class="agl agidxl">`+
+      rows.map(a=>`<li><button class="linkbtn" data-agency="${esc(a.name)}">${esc(a.name)}</button>`+
+        ` <span class="t-sub">${money(a.value)} · ${a.contracts.toLocaleString()} contracts</span></li>`).join("")+
+      `</ol>`;
+  };
+  $("#agq").oninput=draw;
+  draw();
+}
+async function openAgency(name, fromLink){
+  const ix=$("#agidx"); if(ix&&ix.open) ix.close();
+  const d=$("#agdlg"); $("#agdlg-t").textContent=name; route("agency", name);
   $("#agdlg-b").innerHTML='<p class="t-sub">Loading…</p>'; d.showModal();
   await agencyData();
   const a=S.agIdx&&S.agIdx.get(name);
@@ -1999,6 +2064,10 @@ document.addEventListener("click",async e=>{
   if(ab){ openAgency(ab.dataset.agency); return; }
   const b=e.target.closest("button[data-cn]"); if(!b) return;
   const r=S.rows.find(x=>x.cn===b.dataset.cn); if(!r) return;
+  openContract(r);
+});
+async function openContract(r, fromLink){
+  route("cn", r.cn);
   $("#dlg-t").textContent=r.title||r.cn||"Contract";
   $("#dlg-b").innerHTML='<dd class="t-sub">Loading…</dd>';
   $("#dlg").showModal();
@@ -2097,8 +2166,12 @@ document.addEventListener("click",async e=>{
   }
   const link=so13?d.so13_source:cnUrl(r.cn);
   if(link) h+=`<dt>Source</dt><dd><a href="${esc(link)}" target="_blank" rel="noopener">${so13?"Open the listing":"Find on AusTender"}</a></dd>`;
+  h+=`<dt>Link to this contract</dt><dd><code class="perma">${esc(permalink("cn",r.cn))}</code></dd>`;
   $("#dlg-b").innerHTML=h;
-});
+}
+function permalink(kind,id){
+  return location.origin+location.pathname+`#${kind}/${encodeURIComponent(id)}`;
+}
 
 function exportCSV(){
   // Whatever is on screen is what gets exported. The button is visible on all
@@ -2126,7 +2199,14 @@ function exportCSV(){
   a.download=`legal-tender-${name}-${new Date().toISOString().slice(0,10)}.csv`;
   a.click(); URL.revokeObjectURL(a.href);
 }
-boot();
+for(const id of ["dlg","agdlg"]){
+  const d=document.getElementById(id);
+  if(d) d.addEventListener("close",()=>{ if(!document.querySelector("dialog[open]")) route(null); });
+}
+// A link pasted in from elsewhere opens what it names, both on arrival and when
+// the reader moves back and forward through them.
+window.addEventListener("hashchange",openRoute);
+boot().then(openRoute);
 </script>
 </body>
 </html>
