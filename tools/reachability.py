@@ -106,7 +106,12 @@ def main():
     for name, url, what in SOURCES:
         status, body, headers = probe(url)
         ok = status == 200 and len(body) > 2000
-        said = "" if ok else why(body, headers)
+        # No status at all means nothing answered: a timeout or a reset, which
+        # is its own kind of refusal and the one that says least. The exception
+        # is the only thing there is to report, so report it.
+        said = "" if ok else (why(body, headers) or
+                              (body.strip() if status is None else
+                               "no explanation given"))
         rows.append({"source": name, "url": url, "for": what, "status": status,
                      "bytes": len(body), "ok": ok, "refusal": said})
         if not ok:
