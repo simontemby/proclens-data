@@ -303,6 +303,24 @@ def redenominate(rows):
     return rows, n
 
 
+# A capital letter standing on its own before a lowercase word is the PDF
+# extractor having split one word in two: "W ilga Farming" is Wilga Farming.
+# "A" and "I" are left alone, being the only one-letter words in English, which
+# makes a wrong join all but impossible.
+SPLIT_WORD = re.compile(r"(?<![A-Za-z])([B-HJ-Zb-z]) ([a-z]{2,})")
+
+
+def tidy_name(s):
+    """A supplier name with the extractor's accidents taken out.
+
+    The name is part of what identifies a contract where no contract ID is
+    published, so "W ilga Farming" and "Wilga Farming" being two names means one
+    contract counted twice and a reader searching for the company finding half
+    of it. 56 of the 33,193 rows held under this Order carry such a split."""
+    s = re.sub(r"\s+", " ", str(s or "")).strip()
+    return SPLIT_WORD.sub(r"\1\2", s)
+
+
 def as_date(v):
     if isinstance(v, datetime):
         return v.date().isoformat()
@@ -379,7 +397,7 @@ def build_row(r, idx, entity, period, url):
         i = idx.get(k)
         v = r[i] if i is not None and i < len(r) else None
         return v
-    supplier = str(cell("supplier") or "").strip()
+    supplier = tidy_name(cell("supplier"))
     if re.match(r"^(total|contractor|contractor name|supplier|vendor)$", supplier, re.I):
         return None                                  # a repeated header
     value = as_money(cell("value"))
@@ -420,7 +438,7 @@ def parse_xlsx(blob, entity, period, url):
         def cell(k):
             i = idx.get(k)
             return r[i] if i is not None and i < len(r) else None
-        supplier = str(cell("supplier") or "").strip()
+        supplier = tidy_name(cell("supplier"))
         if not supplier or re.match(r"^(total|contractor)$", supplier, re.I):
             continue
         out.append({
