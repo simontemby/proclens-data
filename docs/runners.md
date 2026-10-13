@@ -7,39 +7,51 @@ directions: one of the three never needed a VM, and one of them will not be
 fixed by any VM.
 
 `tools/reachability.py` asks each source directly and reports the refusal in
-the words of whatever is refusing. Run on 12 October 2026:
+the words of whatever is refusing. Run on 12 and 13 October 2026:
 
-| Source | Australian datacentre address | GitHub runner, US | GitHub runner, real Chromium |
+| Source | Australian address | GitHub, HTTP client | GitHub, real Chromium |
 |---|---|---|---|
-| ANAO publications | 403 Akamai | 403 Akamai | **403 Akamai** |
-| Victorian register | **200** | 403 Cloudflare | 403 Cloudflare |
-| buy.nsw | 200 | **200** | 200 |
+| ANAO publications | 403 Akamai | 403 Akamai, then timeout | **403 Akamai, then timeout** |
+| Victorian register | **200** | 403 Cloudflare | 403 one day, **200** the next |
+| buy.nsw **CSV export** | 202 WAF after ~10 requests | **200, 6,823 rows** | — |
 | AusTender OCDS (control) | 200 | 200 | 200 |
+
+The buy.nsw row is the one that matters and the one that was measured wrong at
+first. Asking the homepage told us nothing: the collection needs the bulk
+export, which is a POST to the notice reports form, and that is what the table
+now reports.
 
 ## What each source actually wants
 
-**buy.nsw answers a GitHub runner.** It always did. Whatever keeps the NSW
-collection manual, it is not the site refusing — `nsw.py` reads CSV exports
-that come out of a form, and it is the form that needs a person, not the
-network. Renting a machine would not have changed anything, and the next step
-for NSW is to find whether that export has a URL, not to find a better address.
+**The buy.nsw export answers a GitHub runner** — 3.2 MB and 6,823 contract
+awards for 2026, from a plain HTTP client with no sign-in and no token. The
+form takes `noticeType` (`can` or `son`), an ISO date range, and the same
+`export=1` the button sends. This collection can be automated today, on
+GitHub, with no machine rented anywhere.
 
-**The Victorian register refuses the United States and answers Australia.**
-This is the one source where an Australian machine is the whole answer. It
-returns a Cloudflare interstitial to a US address and the ordinary page to an
-Australian one, for both a plain client and a browser.
+What it will not survive is haste. Taking the export about ten times in quick
+succession while working out the field names moved this machine from 200s to a
+202 AWS WAF challenge, on every path including the homepage, while a real
+browser on the same address kept working — so the shield is counting requests
+from a client, not judging where it sits. A job that takes two exports a week
+stays far inside that. `robots.txt` disallows only `/search`, so the reports
+path is not one the site asks crawlers to leave alone.
+
+**The Victorian register refuses the United States and answers Australia.** A
+real browser on a GitHub runner was refused one day and let through the next,
+so a browser is a way in but not a dependable one. An Australian address is the
+reliable fix for this source, and the only one of the three where that is true.
 
 **The Auditor-General refuses every address tried, including an Australian
-one.** It also refuses a real Chromium driven from the same runner, with the
-same Akamai block it gives a plain HTTP client — so it is reading the address
-rather than the client, and no amount of browser automation is the way in.
+one.** It refuses a real Chromium exactly as it refuses a plain client, so it
+is reading the address rather than the client and browser automation is not the
+way in.
 
-That last result is not quite the end of it. The Australian address tested was
-a shared consumer VPN exit, and Akamai's own words were "a high volume of
-simultaneous submissions from your network", which is precisely what a shared
-address earns. A dedicated address might be judged differently. That is a
-question to settle by running the probe on the machine itself before trusting
-it with a collection — ten minutes, before any of the setup below matters.
+Whether it would accept a dedicated Australian address is still open. The
+Australian address tested was a shared consumer VPN exit, and Akamai's own
+words were "a high volume of simultaneous submissions from your network", which
+is what a shared address earns. That is ten minutes of testing on the machine
+itself, before any of the setup below is worth doing.
 
 ## A free Australian machine
 

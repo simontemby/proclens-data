@@ -374,8 +374,9 @@ found three live defects on the day it was written.
 
 `python tools/reachability.py` asks each source whether it will answer this
 machine and reports the refusal in the words of whatever is refusing. The three
-sources collected by hand do not refuse for the same reason, which is the
-subject of [docs/runners.md](docs/runners.md).
+sources collected by hand do not refuse for the same reason, and only one of
+them needs a machine in Australia — which is the subject of
+[docs/runners.md](docs/runners.md).
 
 ## Deployment
 
