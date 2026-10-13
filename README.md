@@ -55,9 +55,9 @@ three different periods is a number that describes nothing.
 
 | | Contracts | Suppliers named | Threshold | From |
 |---|---|---|---|---|
-| Commonwealth | 1,299,680 | yes, with ABN | $10,000 | 1999, complete from 2014 |
+| Commonwealth | 1,320,543 | yes, with ABN | $10,000 | 1999, complete from 2014 |
 | Victoria | 57,150 *(snapshot, 4 Oct 2026)* | **no** | $100,000 (VGPB) | 2003 |
-| New South Wales | 18,124 | yes, with ABN | $150,000 (GIPA) | 2006 |
+| New South Wales | 18,371 | yes, with ABN | $150,000 (GIPA) | 2006 |
 
 **Victoria is a dated snapshot, not a feed.** 57,150 contracts collected on 4 October 2026
 and not refreshed. Two reasons, and the second decides it: the platform sits behind
@@ -73,15 +73,25 @@ lists all 573 of them; that is also how the register turns out to be far larger 
 admits, its open listing reporting 2,308 records where asking each buyer returns 57,150.
 `vic.py` still runs from a machine the platform answers, if it is ever worth taking again.
 
-**New South Wales** cannot be polled. Every request that is not a browser gets
-`x-amzn-waf-action: challenge` and a JavaScript puzzle, and there is no open-data copy.
-What the platform does offer is its own public bulk CSV export, so that is what this uses:
-a person runs it, the file goes in `data/nsw/raw/` named `can-*.csv` or `son-*.csv`, and
-the workflow ingests it. One export covers the lot — notice type *Contract award*, 2006 to
-today, about 7MB — so a refresh is a single click, and the workflow says so when the newest
-notice it holds is more than 45 days old. The export names the contractor and its ABN, which is why NSW is
-worth the manual step — **2,761 ABNs hold contracts in both the Commonwealth and NSW**,
-joined on identity rather than on a name match.
+**New South Wales** updates itself, twice a week. There is no open-data copy, but the
+platform publishes its own public bulk CSV export, and `nsw.py --fetch` asks for it the
+way the Export CSV button does — a notice type, a date range, no sign-in and no token.
+Awards are taken over a rolling thirteen-month window, because the register amends
+notices after publishing them; standing offers are taken whole.
+
+This was done by hand for a long time on the belief that the register answered nothing
+but a browser. It answers an ordinary client perfectly well. What it will not take is
+haste: ten requests in quick succession turn the answers into empty 202 challenges on
+every path, while a real browser on the same address keeps working. Two requests a week
+is a different thing. Nothing is written unless what came back is a CSV carrying the
+register's own header, with rows under it, and holding at least four fifths of what it
+would replace — an empty 202 carries a success status, and a run that trusted it would
+overwrite good evidence with nothing.
+
+Exports dropped into `data/nsw/raw/` by hand are still read. The export names the
+contractor and its ABN, which is what makes NSW worth having — **2,761 ABNs hold
+contracts in both the Commonwealth and NSW**, joined on identity rather than on a name
+match.
 
 The site carries all three behind a jurisdiction selector. Review flags, value growth and
 the vendor inference describe Commonwealth notices only, so they disappear on a state
@@ -93,7 +103,7 @@ What updates itself, and what does not:
 |---|---|
 | Commonwealth | twice weekly, plus the weekly export, Senate and historical jobs |
 | Approaches to market and BuyICT | Wednesday and Friday nights |
-| New South Wales | when an export is added — the platform answers only a browser |
+| New South Wales | Tuesday and Friday mornings, from the register's own bulk export |
 | Victoria | never; it is a snapshot |
 
 ## What the record does not say
@@ -341,7 +351,13 @@ door lock. Do not re-add one without re-testing it.
 | `senate.yml` | Tuesdays 21:00 UTC | AusTender keeps only three periods before deleting them |
 | `so13.yml` | 1st monthly | Published twice yearly; checking monthly is cheap |
 | `historical.yml` | 8th monthly | Content-hashed, so a repeat run is a no-op |
+| `nsw.yml` | Tuesdays and Fridays 19:00 UTC | Two requests to the register's bulk export, five seconds apart |
+| `son.yml` | Sundays 17:00 UTC | Standing offer arrangements, before the Monday export |
+| `budget.yml` | 10th monthly | Portfolio Budget Statements; budgets move in March and May |
+| `graph.yml` | 12th monthly | Supplier resolution, after the historical ingest |
 | `backfill-resume.yml` | manual only | Resumes a chunked backfill; schedule off since the backfill completed |
+| `anao.yml` | manual only | The Auditor-General refuses GitHub's runners — see [docs/runners.md](docs/runners.md) |
+| `reachability.yml` | manual only | Asks each source whether it will answer; writes nothing |
 
 Every workflow that changes a source rebuilds the corpus before committing, so the site
 never shows a source the corpus has not absorbed. Every writer refuses to start while another is in flight, and refuses to commit a file

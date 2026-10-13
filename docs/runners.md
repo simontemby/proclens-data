@@ -1,10 +1,11 @@
 # Where the collection can run
 
-Three sources are collected by hand because they refuse GitHub's runners. The
+Three sources were collected by hand because they refuse GitHub's runners. The
 standing assumption was that they block anything outside Australia and that a
 free Australian VM would fix all three. Measured, that is wrong in both
-directions: one of the three never needed a VM, and one of them will not be
-fixed by any VM.
+directions: one of the three is now automated on GitHub and never needed a
+machine at all, and one of them will not be fixed by any machine. Only Victoria
+wants an Australian address.
 
 `tools/reachability.py` asks each source directly and reports the refusal in
 the words of whatever is refusing. Run on 12 and 13 October 2026:

@@ -183,6 +183,38 @@ def check_freshness():
                  f"source that publishes at least every {s['cadence_days']}")
 
 
+def check_readme():
+    """The figures the README states, against the stores it states them about.
+
+    A README is a surface like any other: it states a number confidently and
+    goes on stating it long after the number has moved. Its register table said
+    the archive held 1,299,680 Commonwealth contracts when it held 1,320,543,
+    and 18,124 NSW notices when it held 18,371 — both read by anybody deciding
+    whether this archive is worth their time.
+
+    Only the register table is checked, because it is the one place the README
+    repeats a number the build already knows. A figure in the prose is a
+    judgement about what mattered when it was written, and is left alone."""
+    try:
+        text = open("README.md", encoding="utf-8").read()
+    except OSError:
+        return
+    live = {
+        "Commonwealth": (os.path.join(DATA, "corpus", "index.json"), "contracts"),
+        "New South Wales": (os.path.join(DATA, "nsw", "index.json"), "contracts"),
+        "Victoria": (os.path.join(DATA, "vic", "index.json"), "contracts"),
+    }
+    for label, (path, key) in live.items():
+        m = re.search(r"^\|\s*" + re.escape(label) + r"\s*\|\s*([\d,]+)", text, re.M)
+        if not m:
+            continue
+        said = int(m.group(1).replace(",", ""))
+        got = ((build.read_json(path, {}) or {}).get("totals") or {}).get(key)
+        if got and said != got:
+            fail(f"README says the archive holds {said:,} {label} contracts; it holds "
+                 f"{got:,}")
+
+
 def check_search(idx):
     """The index and the page must tokenise identically. A word indexed one way
     and matched another sends a reader to a month and shows them nothing."""
@@ -213,6 +245,7 @@ def main():
     check_sources(t)
     check_so13_floor()
     check_freshness()
+    check_readme()
     check_search(idx)
 
     for n in NOTES:
