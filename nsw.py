@@ -278,13 +278,21 @@ def fetch_export(kind, date_from, date_to, timeout=300):
 
 
 def rows_in_raw(path):
-    """How many rows an export already on disk holds, for comparison."""
+    """How many rows an export already on disk holds, for comparison.
+
+    Counted as CSV records rather than lines. A contract description runs to
+    several lines inside its quotes — 24 of them in one export of 7,918 — so
+    counting lines makes a file look larger than it is, and comparing a line
+    count against a record count makes every fresh export look like a loss."""
     if not os.path.exists(path):
         return 0
     opener = gzip.open if path.endswith(".gz") else open
     try:
         with opener(path, "rt", encoding="utf-8-sig", errors="replace", newline="") as fh:
-            return max(0, sum(1 for _ in fh) - 1)
+            if "Notice ID" not in (fh.readline() or ""):
+                return 0
+            fh.seek(0)
+            return sum(1 for _ in csv.DictReader(fh))
     except OSError:
         return 0
 
