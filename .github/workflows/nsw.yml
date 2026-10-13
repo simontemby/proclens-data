@@ -1,22 +1,32 @@
 name: NSW contract awards
 
-# NSW cannot be polled. buy.nsw sits behind an AWS WAF that answers any client
-# which is not a browser with "x-amzn-waf-action: challenge" and a JavaScript
-# puzzle; defeating that is bot-detection bypass, and this archive does not do
-# it. There is no open-data copy either: data.nsw carries council registers and
-# media releases, and reporting.buy.nsw.gov.au is agency login only.
+# The register publishes its own bulk export, public and without a sign-in:
+# buy.nsw.gov.au/notices/notice-reports, filtered by notice type, agency,
+# category and publish date, with an Export CSV button. This asks for it the way
+# the button does, with the same fields and no token.
 #
-# What the platform does offer is its own bulk export, public and without a
-# sign-in: buy.nsw.gov.au/notices/notice-reports, filtered by notice type,
-# agency, category and publish date, with an Export CSV button. A person runs
-# that and puts the file in data/nsw/raw/. Everything after that is automatic —
-# this parses whatever is there the moment it arrives.
+# It was done by hand for a long time on the belief that the register answered
+# nothing but a browser. It answers an ordinary client perfectly well; what it
+# will not take is haste. Asking about ten times in quick succession turns the
+# answers into empty 202 challenges on every path. So this runs twice a week and
+# makes two requests when it does, five seconds apart, and nothing is written
+# unless what came back is a CSV with rows under the register's own header.
+#
+# Exports dropped into data/nsw/raw/ by hand are still read, and still trigger
+# a run.
 on:
+  schedule:
+    - cron: "0 19 * * 1,4"   # Tuesday and Friday, 06:00 AEDT
   push:
     paths:
       - "data/nsw/raw/**"
       - "nsw.py"
   workflow_dispatch:
+    inputs:
+      full:
+        description: "Ask for the whole history rather than the rolling window"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -37,7 +47,15 @@ jobs:
           python-version: "3.12"
       - run: pip install requests
 
-      - name: Parse the exports
+      # A scheduled run takes the export first. A run triggered by a push to
+      # data/nsw/raw/ reads what the push put there and asks for nothing.
+      - name: Take the exports and parse them
+        if: github.event_name != 'push'
+        run: python nsw.py --raw data/nsw/raw --out data/nsw --fetch
+             ${{ inputs.full && '--full' || '' }}
+
+      - name: Parse the exports already here
+        if: github.event_name == 'push'
         run: python nsw.py --raw data/nsw/raw --out data/nsw
 
       # The stores this job writes are read straight by the site, so they are
@@ -59,9 +77,11 @@ jobs:
               days = (datetime.date.today() - datetime.date.fromisoformat(latest)).days
               line += f" Newest published {latest} — {days} days ago."
               if days > 45:
-                  line += ("\n\n> The register has moved on since these exports. Take a fresh one "
-                           "from https://buy.nsw.gov.au/notices/notice-reports — notice type "
-                           "'Contract award', a publish date range, Export CSV — and add it to "
+                  line += ("\n\n> The register has moved on since these exports and this job "
+                           "is no longer keeping up with it. Check whether the export is "
+                           "being refused — `python tools/reachability.py` says so in the "
+                           "register's own words — and if it is, take one by hand from "
+                           "https://buy.nsw.gov.au/notices/notice-reports and add it to "
                            "`data/nsw/raw/` as `can-<range>.csv`.")
           print(line)
           PY

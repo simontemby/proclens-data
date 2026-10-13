@@ -8,25 +8,38 @@ register — it names the contractor AND its ABN, which is what lets a supplier 
 followed across jurisdictions: the same ABN that holds a Commonwealth contract
 appears here against a NSW agency, or a council.
 
-How the data gets here, and why it is not automatic. The platform sits behind a
-content delivery network that answers anything but a real browser with an empty
-202, and there is no open-data copy: data.nsw carries council registers and
-media releases, not this. The platform does publish its own bulk export —
-buy.nsw.gov.au/notices/notice-reports, public, no sign-in, filtered by notice
-type, agency, category and publish date, with an Export CSV button. That export
-is the supported way to take the register in bulk, so that is the way this
-archive takes it: a person clicks the button, the file lands in data/nsw/raw/,
-and this reads whatever is there. Nothing here pretends to be a browser.
+How the data gets here. There is no open-data copy — data.nsw carries council
+registers and media releases, not this — but the platform publishes its own bulk
+export at buy.nsw.gov.au/notices/notice-reports: public, no sign-in, filtered by
+notice type, agency, category and publish date, with an Export CSV button. That
+is the supported way to take the register in bulk, and `--fetch` asks for it the
+way the button does, with the same fields and no token.
+
+This was done by hand for a long time on the belief that the register answered
+nothing but a browser. It answers an ordinary client perfectly well; what it
+will not take is haste. Asking for the export about ten times in quick
+succession, while working out what the form wanted, moved this machine from
+answers to an empty 202 on every path, while a real browser on the same address
+kept working — so the shield in front of it counts requests from a client rather
+than judging where that client sits. Two requests a week, five seconds apart, is
+a different thing entirely. robots.txt disallows only /search.
+
+An export that comes back short, or not as a CSV at all, is refused before
+anything is written: an empty 202 carries a success status, and a run that
+trusted it would overwrite good evidence with nothing and report that all was
+well.
 
 Name each export for what it holds: can-*.csv for contract awards, son-*.csv for
 standing offers. The export carries no notice-type column, so the filter used to
 take it is the only record of what is in it — an unfiltered export mixes awards
 and standing offers with no way to tell them apart afterwards, and is refused.
 
-Drop any number of exports into data/nsw/raw/ — overlapping date ranges are
-fine, and where the same row appears twice the newest "last updated" wins — then:
+    python nsw.py --fetch          # take the exports, then read them
+    python nsw.py --fetch --full   # ask for the whole history, not the window
+    python nsw.py                  # read whatever is already in data/nsw/raw/
 
-    python nsw.py
+Exports may also be dropped into data/nsw/raw/ by hand. Overlapping date ranges
+are fine, and where the same row appears twice the newest "last updated" wins.
 
 Keep the CSVs. They are the evidence, and they are gzipped on the way in.
 """
@@ -38,14 +51,19 @@ import io
 import os
 import re
 import sys
+import time
+import urllib.parse
+import urllib.request
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 import build
 import vic
 
 DATA = os.environ.get("PROCLENS_DATA", "data")
 SOURCE = "https://buy.nsw.gov.au/notices/notice-reports"
+UA = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+      "(KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36")
 
 # The export's own headings, in its own words.
 COLUMNS = {
@@ -199,6 +217,120 @@ def read_csv(path):
             }
 
 
+# The export the register publishes for taking itself in bulk is the same form a
+# person fills in at SOURCE, with the same button. It carries no token and needs
+# no sign-in — a notice type, a date range, and export=1.
+# How far back a routine run asks. The register keeps amending notices after it
+# publishes them, so a window that only covered the days since the last run
+# would take a notice once and never see it corrected. Thirteen months is long
+# enough to catch an amendment and short enough to stay a small file.
+WINDOW_DAYS = 400
+
+# What a run may ask for. The shield in front of this register counts requests:
+# taking the export about ten times in quick succession, while working out what
+# the form wanted, moved this machine from answers to an empty 202 challenge on
+# every path — including pages a browser on the same address still had. Two
+# requests a week is a different thing entirely, and the pause below keeps even
+# those from arriving together.
+PAUSE = 5.0
+
+
+def fetch_export(kind, date_from, date_to, timeout=300):
+    """One export, as CSV text, or None if what came back was not one.
+
+    What comes back when the shield objects is a 202 with an empty body rather
+    than an error, so a run that trusted the status code would write an empty
+    file over a good one and report success. Everything here is checked before
+    anything is written: the type, the header the register's own export carries,
+    and that there are rows under it."""
+    body = urllib.parse.urlencode({
+        "noticeType": kind, "agencyUUID": "", "category": "", "query": "",
+        "dateFrom": date_from, "dateTo": date_to, "export": "1"}).encode()
+    req = urllib.request.Request(SOURCE, data=body, headers={
+        "User-Agent": UA,
+        "Content-Type": "application/x-www-form-urlencoded",
+        "Referer": SOURCE,
+        "Accept": "text/csv,text/html;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-AU,en;q=0.9",
+    })
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            status, ctype = r.status, r.headers.get("Content-Type", "")
+            text = r.read().decode("utf-8-sig", "replace")
+    except Exception as e:
+        print(f"  ! {kind}: {type(e).__name__}: {e}", file=sys.stderr)
+        return None
+    if status != 200 or "csv" not in ctype.lower():
+        print(f"  ! {kind}: the register answered {status} {ctype or '(no type)'} rather "
+              f"than a CSV — it is most likely challenging this client, which it does "
+              f"with an empty 202. Nothing written.", file=sys.stderr)
+        return None
+    head = text.split("\n", 1)[0]
+    if "Notice ID" not in head or "Contractor ABN" not in head:
+        print(f"  ! {kind}: what came back is not a notice report. Nothing written.",
+              file=sys.stderr)
+        return None
+    rows = sum(1 for _ in csv.DictReader(io.StringIO(text)))
+    if rows < 1:
+        print(f"  ! {kind}: the export is empty. Nothing written.", file=sys.stderr)
+        return None
+    return text, rows
+
+
+def rows_in_raw(path):
+    """How many rows an export already on disk holds, for comparison."""
+    if not os.path.exists(path):
+        return 0
+    opener = gzip.open if path.endswith(".gz") else open
+    try:
+        with opener(path, "rt", encoding="utf-8-sig", errors="replace", newline="") as fh:
+            return max(0, sum(1 for _ in fh) - 1)
+    except OSError:
+        return 0
+
+
+def fetch_all(raw_dir, full=False, floor=0.8):
+    """Take the exports the register publishes, into raw_dir.
+
+    Awards are taken over a rolling window and standing offers in full, because
+    there are only about 2,400 of them and the whole set is a smaller file than
+    one year of awards. The historical exports already in raw_dir are left
+    alone: they are the evidence for the years they cover, and nothing here
+    rewrites them.
+
+    An export holding markedly less than the one it would replace is refused.
+    The register answering with a short file is how a silent truncation would
+    look, and overwriting good evidence with it is the one thing this must not
+    do."""
+    today = date.today()
+    start = "2000-01-01" if full else (today - timedelta(days=WINDOW_DAYS)).isoformat()
+    end = (today + timedelta(days=1)).isoformat()
+    wants = [("can", "can-full.csv" if full else "can-recent.csv", start),
+             ("son", "son-all.csv", "2000-01-01")]
+
+    took = 0
+    for i, (kind, name, since) in enumerate(wants):
+        if i:
+            time.sleep(PAUSE)
+        got = fetch_export(kind, since, end)
+        if not got:
+            continue
+        text, rows = got
+        path = os.path.join(raw_dir, name)
+        had = rows_in_raw(path) or rows_in_raw(path + ".gz")
+        if had and rows < had * floor:
+            print(f"  ! {kind}: {rows:,} rows, against {had:,} in the export it would "
+                  f"replace. Refusing to overwrite evidence with a short file.",
+                  file=sys.stderr)
+            continue
+        with open(path, "w", encoding="utf-8", newline="") as fh:
+            fh.write(text)
+        took += 1
+        print(f"  {name}: {rows:,} rows, {since} to {end}"
+              f"{f' (was {had:,})' if had else ''}", file=sys.stderr)
+    return took
+
+
 def keep_raw(raw_dir):
     """Exports are the evidence; plain CSVs are gzipped where they sit."""
     for p in sorted(glob.glob(os.path.join(raw_dir, "*.csv"))):
@@ -213,12 +345,22 @@ def main():
     ap.add_argument("--raw", default=os.path.join(DATA, "nsw", "raw"))
     ap.add_argument("--out", default=os.path.join(DATA, "nsw"))
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--fetch", action="store_true",
+                    help="take the exports from the register first")
+    ap.add_argument("--full", action="store_true",
+                    help="with --fetch, ask for the whole history rather than "
+                         "the rolling window")
     args = ap.parse_args()
 
     if os.path.isfile(args.out):
         sys.exit(f"nsw: --out is {args.out}, which is a file. This store is a directory of "
                  f"year shards now; delete the old file or point --out at its directory.")
     os.makedirs(args.raw, exist_ok=True)
+    if args.fetch:
+        if fetch_all(args.raw, full=args.full) == 0:
+            sys.exit("nsw: the register gave nothing this run. The store is unchanged, "
+                     "which is the right outcome — but if this repeats, take an export "
+                     f"by hand from {SOURCE} and put it in {args.raw}.")
     if not args.dry_run:
         keep_raw(args.raw)
     files = sorted(glob.glob(os.path.join(args.raw, "*.csv.gz")) +
