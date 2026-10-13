@@ -150,8 +150,7 @@ def discover(src):
         # mandates beside the listings. Only take what says it is a listing: a
         # contract listing, or a Senate Order, or a reporting period.
         hay = (text + " " + href).lower()
-        if not re.search(r"senate\s*order|entity\s*contract|contract.{0,20}listing|"
-                         r"listing.{0,20}contract|murray motion|contract register", hay):
+        if not LISTING_RE.search(hay):
             continue
         out.append({"url": url, "label": (text or href.rsplit("/", 1)[-1])[:120],
                     "period": period_of(text + " " + href),
@@ -172,6 +171,19 @@ def discover(src):
         out.append({"url": src["base"] + href, "label": text[:120],
                     "period": period_of(text), "xlsx": bool(re.search(r"xlsx|excel", text, re.I))})
     return out
+
+
+# What marks a link as a listing rather than a board charter or a privacy
+# policy. The words may arrive separated by anything a file name uses, because
+# often the file name is all there is: the Reserve Bank's links read "Download
+# 48KB" and carry the whole description in the href, as
+# contract-register-for-senate-order-reporting-period-ending-2026-06-30.xlsx.
+# Matching only on whitespace missed every one of them, and the store kept
+# serving two listings taken before the page changed, saying nothing.
+_SEP = r"[\s_\-/.]*"
+LISTING_RE = re.compile(
+    rf"senate{_SEP}order|entity{_SEP}contract|contract.{{0,20}}listing|"
+    rf"listing.{{0,20}}contract|murray{_SEP}motion|contract{_SEP}register")
 
 
 MONTHS = ("january|february|march|april|may|june|july|august|september|october|"
@@ -227,7 +239,9 @@ def map_columns(cols):
 # A number that is grouped in thousands, taken whole: "4,150,000", "1.2",
 # "$407,806.00". Anchored so the groups after the first must each be three
 # digits, which is what tells a real amount from a cell pdfplumber cut in half.
-MONEY_RE = re.compile(r"-?\$?\s*(\d{1,3}(?:,\d{3})*|\d+)(\.\d+)?")
+# The grouped form is tried first but must carry a comma to be chosen, or
+# "12345.00" matched as "123" and the rest was read as a second number.
+MONEY_RE = re.compile(r"-?\$?\s*(\d{1,3}(?:,\d{3})+|\d+)(\.\d+)?")
 
 
 def as_money(v):
@@ -253,6 +267,14 @@ def as_money(v):
     s = str(v or "").strip()
     if not s:
         return None
+    # The extractor breaks a number apart where the PDF spaced its glyphs:
+    # CSIRO's amounts arrive as "$ 2 ,777,308.60" and "$ 5 4,954,621.70". A space
+    # sitting between two digits, or between a digit and its grouping comma, is
+    # not a separator between two numbers — it is one number the extractor split
+    # — so it is closed up before the grouping is checked. A space anywhere else
+    # is left alone, which is what keeps "4,150,000 (Part of CEFC's $50,000,000
+    # commitment...)" two numbers rather than one.
+    s = re.sub(r"(?<=[\d,])\s+(?=[\d,])", "", s)
     m = MONEY_RE.match(s)
     if not m:
         m = MONEY_RE.search(s)
@@ -471,7 +493,7 @@ def main():
     args = ap.parse_args()
     os.makedirs(args.out, exist_ok=True)
 
-    manifest, total = [], 0
+    manifest, total, barren = [], 0, []
     for src in SOURCES:
         if args.only and src["short"] != args.only:
             continue
@@ -481,6 +503,8 @@ def main():
             print(f"! {src['short']}: cannot read page ({e})", file=sys.stderr)
             continue
         print(f"{src['short']}: {len(files)} listing files found", file=sys.stderr)
+        if not files:
+            barren.append(src["short"])
         for f in files:
             # Both formats are read now. An entity that publishes the same period
             # as a spreadsheet and a PDF is read from the spreadsheet, which needs
@@ -570,6 +594,20 @@ def main():
         seen_urls.add(shard.get("source_url"))
         total += len(rows)
 
+    # A source whose page yields no listings at all, while the store still holds
+    # shards for it, has changed in some way this cannot read. Carrying the old
+    # listings forward is right — they are what the archive has — but doing it
+    # quietly is how the Reserve Bank went unread for two reporting periods
+    # while the index went on reporting 867 contracts as though nothing had
+    # happened. The run says so, and the index records it for check.py.
+    held = {m["short"] for m in manifest}
+    stale = sorted(s for s in barren if s in held)
+    for s in stale:
+        n = sum(m["count"] for m in manifest if m["short"] == s)
+        print(f"! {s}: its page offered no listings, so the {n:,} contracts shown for it "
+              f"are whatever was taken last time. The page has most likely changed.",
+              file=sys.stderr)
+
     manifest.sort(key=lambda m: (m["short"], m["period"]), reverse=True)
     with open(os.path.join(args.out, "index.json"), "w") as fh:
         json.dump({
@@ -579,6 +617,7 @@ def main():
                     "$100,000 or more only, so smaller spend is absent by design.",
             "fields": FIELDS,
             "listings": manifest,
+            "sources_offering_nothing": stale,
         }, fh, separators=(",", ":"))
     print(f"Total {total} contracts across {len(manifest)} listings.", file=sys.stderr)
 
