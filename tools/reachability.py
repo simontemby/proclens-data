@@ -120,6 +120,37 @@ def probe_browser(url, timeout=45):
             b.close()
 
 
+def probe_nsw_export():
+    """Whether the buy.nsw bulk export answers this machine.
+
+    The homepage answering says nothing: the export is a POST to the notice
+    reports form, and that is the request the collection actually needs. The
+    form carries no token and needs no sign-in — noticeType, a date range, and
+    the same export button a person clicks."""
+    import urllib.parse
+    body = urllib.parse.urlencode({
+        "noticeType": "can", "agencyUUID": "", "category": "", "query": "",
+        "dateFrom": "2026-01-01", "dateTo": "2026-12-31", "export": "1"}).encode()
+    req = urllib.request.Request(
+        "https://buy.nsw.gov.au/notices/notice-reports", data=body, headers={
+            "User-Agent": UA, "Content-Type": "application/x-www-form-urlencoded",
+            "Referer": "https://buy.nsw.gov.au/notices/notice-reports",
+            "Accept-Language": "en-AU,en;q=0.9"})
+    try:
+        with urllib.request.urlopen(req, timeout=180) as r:
+            text = r.read().decode("utf-8", "replace")
+            rows = max(0, text.count("\n") - 1)
+            ok = r.status == 200 and "Contractor ABN" in text and rows > 100
+            print(f"  {'buy.nsw CSV export':20} "
+                  f"{'answers' if ok else 'REFUSES':16} {len(text):>9,}b  "
+                  f"{rows:,} rows  status {r.status}", file=sys.stderr)
+            return ok
+    except Exception as e:
+        print(f"  {'buy.nsw CSV export':20} {'REFUSES':16} {type(e).__name__}: {e}",
+              file=sys.stderr)
+        return False
+
+
 def main():
     ap = argparse.ArgumentParser(description="Which sources answer this machine.")
     ap.add_argument("--json", action="store_true", help="machine-readable output")
@@ -154,6 +185,9 @@ def main():
             refused += 1
         mark = "answers" if ok else f"REFUSES ({status})"
         print(f"  {name:20} {mark:16} {len(body):>7,}b  {said}", file=sys.stderr)
+
+    if not args.browser:
+        probe_nsw_export()
 
     print("", file=sys.stderr)
     if refused:
