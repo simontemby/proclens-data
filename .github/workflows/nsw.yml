@@ -47,6 +47,14 @@ jobs:
           python-version: "3.12"
       - run: pip install requests
 
+      # Bring the tree up to date before generating anything. The store is
+      # rewritten from the exports on every run, so a run that generates first
+      # and pulls afterwards is asking git to merge two machines' renderings of
+      # the same source — which conflicts on files neither machine disagrees
+      # about. Pulling first, while the tree is clean, leaves nothing to merge.
+      - name: Catch up with the archive
+        run: git pull --rebase origin main
+
       # A scheduled run takes the export first. A run triggered by a push to
       # data/nsw/raw/ reads what the push put there and asks for nothing.
       - name: Take the exports and parse them
@@ -90,14 +98,23 @@ jobs:
         run: |
           git config user.name "legal-tender-bot"
           git config user.email "legal-tender-bot@users.noreply.github.com"
-          git pull --rebase --autostash origin main || { git rebase --abort 2>/dev/null || true; }
           if grep -rlq '^<<<<<<< ' data 2>/dev/null; then
             echo 'refusing to commit: conflict markers in data/' >&2; exit 1
           fi
           git add data/nsw
-          if ! git diff --staged --quiet; then
-            git commit -m "NSW contract awards $(date -u +%F)"
-            git push origin main
-          else
-            echo "nothing new"
+          if git diff --staged --quiet; then
+            echo "nothing new"; exit 0
           fi
+          git commit -m "NSW contract awards $(date -u +%F)"
+          # Another writer may have pushed while this ran. Rebasing a commit is
+          # safe where stashing uncommitted changes was not, and if even that
+          # conflicts the run stops rather than guessing which rendering of a
+          # generated file is the right one: the next run rebuilds the store
+          # from the exports regardless, so nothing is lost by stopping here.
+          if ! git pull --rebase origin main; then
+            git rebase --abort 2>/dev/null || true
+            echo "another writer moved main while this ran; the next run will "\
+                 "rebuild from the exports" >&2
+            exit 1
+          fi
+          git push origin main
