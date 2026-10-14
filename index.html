@@ -94,6 +94,31 @@ h1 .co{color:var(--pink)}
 .iconbtn:hover{background:var(--tint)}
 
 .tools{padding:14px 0 18px}
+
+/* The collapsed app bar. Hidden until a reader scrolls past the search, then it
+   replaces the header, the search row, the jurisdictions and the counts with one
+   line saying what is on screen and a way back to change it. */
+/* One pixel, not none: an element with no area never intersects anything, so a
+   zero-height sentinel is never reported as having been scrolled past. */
+#minisentinel{height:1px;margin-top:-1px}
+/* padding-block only: .wrap supplies the side gutter, and setting padding here
+   in full took it away and ran the button off the edge of the screen. */
+.minibar{display:none;align-items:center;gap:10px;padding-block:7px;min-height:44px}
+.appbar.min .minibar{display:flex}
+.appbar.min > header,.appbar.min .tools{display:none}
+.minisum{flex:1;min-width:0;display:flex;align-items:baseline;gap:8px;text-align:left;
+  background:transparent;border:0;padding:0;cursor:pointer;color:var(--ink)}
+.minilabel{font:700 15px var(--sans);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.minilabel.q::before{content:"\201C"}
+.minilabel.q::after{content:"\201D"}
+.minicount{font:700 12px var(--mono);color:var(--muted);white-space:nowrap;flex:none}
+.minifilters{font:700 11px var(--mono);color:var(--on-ink);background:var(--ink);
+  border-radius:999px;padding:3px 8px;white-space:nowrap;flex:none}
+.minichange{flex:none;min-height:34px;padding:6px 11px;font-size:12px}
+@media (max-width:899px){
+  .minilabel{font-size:14px}
+  .minichange{padding:6px 9px}
+}
 .searchrow{display:flex;gap:10px;align-items:stretch;margin-bottom:6px}
 #q{flex:1;min-width:0;font:600 19px var(--sans);padding:12px 15px;border:3px solid var(--ink);border-radius:var(--r);
   background:var(--card);color:var(--ink);box-shadow:5px 5px 0 var(--pink);transition:box-shadow .12s}
@@ -445,7 +470,25 @@ html{touch-action:manipulation}
     <progress id="prog" max="100" value="0" hidden></progress>
   </div>
 </div>
+<!-- What the app bar shrinks to once a reader has scrolled into the results.
+     The header and the search travel together and are sticky, which on a phone
+     left them holding 495 of 812 pixels — the archive had less room than its own
+     chrome. This says what is being shown and gives it back. -->
+<div class="wrap minibar" id="minibar" hidden>
+  <button class="minisum" id="miniExpand" aria-expanded="false" aria-controls="q">
+    <span class="minilabel" id="miniLabel">Search</span>
+    <span class="minicount" id="miniCount"></span>
+  </button>
+  <span class="minifilters" id="miniFilters" hidden></span>
+  <button class="iconbtn minichange" id="miniChange">Change</button>
 </div>
+</div>
+
+<!-- Marks where the app bar ends. When this scrolls out of view the reader is
+     into the results and the bar folds; when it comes back they are at the
+     controls again. Watched rather than measured, so it holds however the page
+     is scrolled — a wheel, a thumb, a keyboard, or a find-on-page jump. -->
+<div id="minisentinel" aria-hidden="true"></div>
 
 <div class="wrap">
 <dialog id="filterSheet" aria-label="Filters">
@@ -1238,8 +1281,109 @@ function filterBadge(){
   const el=$("#filterCount");
   el.textContent=String(n); el.hidden=n===0;
 }
+/* ---------- the app bar, collapsed while reading ----------
+   The header and the search are sticky so they travel with the reader, which on
+   a phone meant 495 of 812 pixels were chrome before the first contract: the
+   archive had less room than the controls for reading it. Scrolling into the
+   results now folds all of it into one line saying what is on screen, with a way
+   back. Scrolling to the top unfolds it again, so the fold is never somewhere a
+   reader can get stuck.
+
+   It folds on scrolling rather than on searching, because a search here runs as
+   you type: collapsing when a search "completes" would snatch the field away
+   mid-word. Scrolling is the moment a reader has stopped composing and started
+   reading. */
+let miniPast = false;     // the sentinel has left the top of the viewport
+let miniLock = false;     // held open after Change, until the reader scrolls down
+let miniSaving = 0;       // height folding gives back, learned the first time it folds
+
+function miniSummary(){
+  const q = (S.qRaw || "").trim();
+  const tab = {c:"Contracts", s:"Suppliers", a:"Analysis", n:"Open tenders"}[S.tab] || "Contracts";
+  const label = $("#miniLabel");
+  // The analysis view draws series computed across the whole archive, which no
+  // query or filter here narrows. Naming the query beside it would say the
+  // charts answer it, and they do not.
+  const analysis = S.tab === "a";
+  label.textContent = analysis ? "Analysis" : (q || tab);
+  label.classList.toggle("q", !analysis && !!q);
+  // The count line is the archive's own answer to "how many"; the fold repeats
+  // its number rather than counting again and risking a different one. On the
+  // analysis view there is no result set to count, and that line is left over
+  // from whichever view was open before, so nothing is repeated.
+  const m = analysis ? null : ($("#count").textContent || "").match(/[\d,]+/);
+  $("#miniCount").textContent = m ? m[0] + (S.tab === "s" ? " suppliers"
+                                  : S.tab === "n" ? " notices" : " contracts") : "";
+  const n = analysis ? 0
+          : (S.agency?1:0) + ((S.v1!=null||S.v2!=null)?1:0) + S.flags.size;
+  const f = $("#miniFilters");
+  f.textContent = n ? `${n} filter${n>1?"s":""}` : "";
+  f.hidden = !n;
+}
+
+function miniSync(){
+  const bar = document.querySelector(".appbar");
+  if(!bar) return;
+  const reading = !$("#results").hidden;
+  const typing = document.activeElement === $("#q");
+  if(!miniPast) miniLock = false;
+  // Folding a page that barely scrolls can leave it shorter than the window,
+  // which puts the reader back at the top, brings the sentinel back into view
+  // and unfolds — then the page grows and folds again. So the question is
+  // whether the page would still scroll once folded, which has to be asked
+  // against the height the fold gives back rather than the bar's height now:
+  // measured while already folded, a short page looks like a long one.
+  const folded = bar.classList.contains("min");
+  const saving = miniSaving || Math.max(0, bar.getBoundingClientRect().height - 60);
+  const room = document.documentElement.scrollHeight - (folded ? 0 : saving)
+             - window.innerHeight > 200;
+  const want = reading && miniPast && room && !typing && !miniLock;
+  if(want !== bar.classList.contains("min")){
+    const before = bar.getBoundingClientRect().height;
+    bar.classList.toggle("min", want);
+    $("#minibar").hidden = !want;
+    const after = bar.getBoundingClientRect().height;
+    // Folding takes the bar's height out of the flow and everything below jumps
+    // up by it, under the thumb of someone trying to read. The scroll position
+    // moves by the same amount, so what they were looking at does not move.
+    //
+    // Unfolding is not corrected, and must not be: it happens when the reader
+    // has scrolled back to the top, and pushing them down by the height just
+    // restored would fight the gesture that asked for it. Letting the bar open
+    // above them is what they were reaching for.
+    if(before > after) miniSaving = before - after;
+    if(want && before > after) window.scrollBy(0, after - before);
+  }
+  if(want) miniSummary();
+  $("#miniExpand").setAttribute("aria-expanded", String(!want));
+}
+
+function miniOpen(){
+  // Back to the top, where the search is: this is the reader saying they want to
+  // change what they asked for, not merely to see the controls.
+  miniLock = true;
+  window.scrollTo({top:0, behavior: matchMedia("(prefers-reduced-motion:reduce)").matches
+                                    ? "auto" : "smooth"});
+  miniSync();
+  setTimeout(()=>$("#q").focus({preventScroll:true}), 220);
+}
+
 function wire(){
   document.querySelectorAll("th[data-s]").forEach(b=>b.closest("th").setAttribute("data-sortable",""));
+  $("#miniExpand").onclick = miniOpen;
+  $("#miniChange").onclick = miniOpen;
+  const sentinel = $("#minisentinel");
+  if(sentinel && "IntersectionObserver" in window){
+    new IntersectionObserver(es=>{
+      // Above the viewport, not merely out of it: a sentinel below the fold on a
+      // tall screen is not someone who has scrolled.
+      const e = es[es.length-1];
+      miniPast = !e.isIntersecting && e.boundingClientRect.top < 0;
+      miniSync();
+    }, {threshold:0}).observe(sentinel);
+  }
+  $("#q").addEventListener("focus", miniSync);
+  $("#q").addEventListener("blur", ()=>setTimeout(miniSync, 0));
   let t;
   $("#q").oninput=e=>{clearTimeout(t);t=setTimeout(()=>{
     S.qRaw=e.target.value; S.q=S.qRaw.trim().toLowerCase();

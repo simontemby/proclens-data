@@ -388,6 +388,11 @@ attribution that has stopped being mostly read. Every workflow that writes a
 store runs it before committing, so a build that fails is not published. It
 found three live defects on the day it was written.
 
+`python tools/uicheck.py` drives the page in a real browser and asserts how it
+behaves — that the app bar folds out of the way once a reader is into the
+results, that it says what is on screen, that the way back is on screen, and
+that it never moves while someone is reading or typing. Needs `playwright`.
+
 `python tools/reachability.py` asks each source whether it will answer this
 machine and reports the refusal in the words of whatever is refusing. The three
 sources collected by hand do not refuse for the same reason, and only one of
