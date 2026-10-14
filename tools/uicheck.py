@@ -67,17 +67,21 @@ def check(pw, url, width, height, label):
     pg.eval_on_selector("#q", "e=>e.blur()")
     pg.wait_for_timeout(300)
 
+    # The bar's full height, measured with it open.
+    pg.click("#miniChange")
+    pg.wait_for_timeout(500)
     full = bar_height(pg)
-    ok(not folded(pg), "the bar is open before anything is scrolled")
+    ok(not folded(pg), "pressing Change opens the search")
 
-    pg.mouse.wheel(0, 1400)
+    # Finishing a search is dismissing the keyboard, which blurs the field.
+    pg.eval_on_selector("#q", "e=>e.blur()")
     try:
         pg.wait_for_function("()=>document.querySelector('.appbar').classList.contains('min')",
                              timeout=6000)
     except Exception:
         pass
     small = bar_height(pg)
-    ok(folded(pg), "it folds once the reader is into the results")
+    ok(folded(pg), "it folds as soon as the search is done, with no scrolling")
     ok(small < full / 3, f"the fold is worth having: {full}px to {small}px",
        f"only {full - small}px returned")
     ok(small < height * 0.12, f"folded, it takes {round(small/height*100)}% of the screen")
@@ -103,6 +107,10 @@ def check(pw, url, width, height, label):
         await new Promise(r=>setTimeout(r,2000)); mo.disconnect(); return n;}""")
     ok(flips == 0, "it does not flap while the reader sits still", f"{flips} changes")
 
+    pg.mouse.wheel(0, 1400)
+    pg.wait_for_timeout(500)
+    ok(folded(pg), "it stays folded while the reader scrolls the results")
+
     pg.click("#miniChange")
     try:
         pg.wait_for_function("()=>window.scrollY===0", timeout=5000)
@@ -112,6 +120,15 @@ def check(pw, url, width, height, label):
     ok(not folded(pg), "Change opens it again")
     ok(pg.evaluate("window.scrollY") == 0, "Change goes back to the top, where the search is")
     ok(pg.evaluate("document.activeElement.id") == "q", "Change puts the cursor in the search box")
+    ok(pg.is_visible("#tab-a"), "the tabs come back with it")
+
+    # Scrolling down again is the reader going back to the results.
+    pg.eval_on_selector("#q", "e=>e.blur()")
+    pg.mouse.wheel(0, 300)
+    pg.wait_for_timeout(600)
+    ok(folded(pg), "scrolling back to the results folds it again")
+    pg.click("#miniChange")
+    pg.wait_for_timeout(600)
 
     # Typing must never pull the field away mid-word.
     pg.type("#q", "Serco", delay=40)
@@ -119,10 +136,9 @@ def check(pw, url, width, height, label):
     ok(not folded(pg), "it stays open while the reader is typing")
 
     # The analysis view has no result set, so it must not claim a count.
-    pg.eval_on_selector("#q", "e=>e.blur()")
     pg.click("#tab-a")
     pg.wait_for_timeout(2500)
-    pg.mouse.wheel(0, 1400)
+    pg.eval_on_selector("#q", "e=>e.blur()")
     pg.wait_for_timeout(900)
     if folded(pg):
         a = pg.evaluate("""()=>({label:document.querySelector('#miniLabel').textContent,

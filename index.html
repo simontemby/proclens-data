@@ -98,9 +98,6 @@ h1 .co{color:var(--pink)}
 /* The collapsed app bar. Hidden until a reader scrolls past the search, then it
    replaces the header, the search row, the jurisdictions and the counts with one
    line saying what is on screen and a way back to change it. */
-/* One pixel, not none: an element with no area never intersects anything, so a
-   zero-height sentinel is never reported as having been scrolled past. */
-#minisentinel{height:1px;margin-top:-1px}
 /* padding-block only: .wrap supplies the side gutter, and setting padding here
    in full took it away and ran the button off the edge of the screen. */
 .minibar{display:none;align-items:center;gap:10px;padding-block:7px;min-height:44px}
@@ -483,12 +480,6 @@ html{touch-action:manipulation}
   <button class="iconbtn minichange" id="miniChange">Change</button>
 </div>
 </div>
-
-<!-- Marks where the app bar ends. When this scrolls out of view the reader is
-     into the results and the bar folds; when it comes back they are at the
-     controls again. Watched rather than measured, so it holds however the page
-     is scrolled — a wheel, a thumb, a keyboard, or a find-on-page jump. -->
-<div id="minisentinel" aria-hidden="true"></div>
 
 <div class="wrap">
 <dialog id="filterSheet" aria-label="Filters">
@@ -1293,9 +1284,9 @@ function filterBadge(){
    you type: collapsing when a search "completes" would snatch the field away
    mid-word. Scrolling is the moment a reader has stopped composing and started
    reading. */
-let miniPast = false;     // the sentinel has left the top of the viewport
-let miniLock = false;     // held open after Change, until the reader scrolls down
+let miniLock = false;     // held open until the reader asks for the results again
 let miniSaving = 0;       // height folding gives back, learned the first time it folds
+let miniSettle = 0;       // until when the page's own scrolling is not the reader's
 
 function miniSummary(){
   const q = (S.qRaw || "").trim();
@@ -1324,35 +1315,26 @@ function miniSummary(){
 function miniSync(){
   const bar = document.querySelector(".appbar");
   if(!bar) return;
+  // Folded whenever there are results to read and nobody is composing a search.
+  // The first version of this waited for the reader to scroll past the whole
+  // bar, which on a phone meant most of a screen of scrolling before any of it
+  // came back — so on the device it was written for, it looked like nothing had
+  // changed at all.
   const reading = !$("#results").hidden;
   const typing = document.activeElement === $("#q");
-  if(!miniPast) miniLock = false;
-  // Folding a page that barely scrolls can leave it shorter than the window,
-  // which puts the reader back at the top, brings the sentinel back into view
-  // and unfolds — then the page grows and folds again. So the question is
-  // whether the page would still scroll once folded, which has to be asked
-  // against the height the fold gives back rather than the bar's height now:
-  // measured while already folded, a short page looks like a long one.
-  const folded = bar.classList.contains("min");
-  const saving = miniSaving || Math.max(0, bar.getBoundingClientRect().height - 60);
-  const room = document.documentElement.scrollHeight - (folded ? 0 : saving)
-             - window.innerHeight > 200;
-  const want = reading && miniPast && room && !typing && !miniLock;
+  const want = reading && !typing && !miniLock;
   if(want !== bar.classList.contains("min")){
     const before = bar.getBoundingClientRect().height;
     bar.classList.toggle("min", want);
     $("#minibar").hidden = !want;
     const after = bar.getBoundingClientRect().height;
-    // Folding takes the bar's height out of the flow and everything below jumps
-    // up by it, under the thumb of someone trying to read. The scroll position
-    // moves by the same amount, so what they were looking at does not move.
-    //
-    // Unfolding is not corrected, and must not be: it happens when the reader
-    // has scrolled back to the top, and pushing them down by the height just
-    // restored would fight the gesture that asked for it. Letting the bar open
-    // above them is what they were reaching for.
     if(before > after) miniSaving = before - after;
-    if(want && before > after) window.scrollBy(0, after - before);
+    // Folding takes the bar's height out of the flow and everything below jumps
+    // up by it. Where the reader is already into the page, the scroll position
+    // moves by the same amount so what they were looking at does not move. At
+    // the top there is nothing above them to hold still.
+    if(want && before > after && window.scrollY > 0)
+      window.scrollBy(0, Math.max(after - before, -window.scrollY));
   }
   if(want) miniSummary();
   $("#miniExpand").setAttribute("aria-expanded", String(!want));
@@ -1360,30 +1342,48 @@ function miniSync(){
 
 function miniOpen(){
   // Back to the top, where the search is: this is the reader saying they want to
-  // change what they asked for, not merely to see the controls.
+  // change what they asked for, not merely to see the controls. It stays open
+  // until they go back to the results, so it cannot fold under them while they
+  // are reaching for a filter.
   miniLock = true;
+  // Opening puts 400-odd pixels back above the reader, and the browser moves the
+  // scroll position to keep what they were looking at still — its scroll
+  // anchoring, doing exactly the right thing. Read as a gesture, that jump looks
+  // like scrolling down, which folded the bar again the instant it opened. For
+  // the moment it takes to settle, and for the scroll to the top that follows,
+  // movement is the page's own and not the reader's.
+  miniSettle = Date.now() + 900;
+  miniSync();
   window.scrollTo({top:0, behavior: matchMedia("(prefers-reduced-motion:reduce)").matches
                                     ? "auto" : "smooth"});
-  miniSync();
   setTimeout(()=>$("#q").focus({preventScroll:true}), 220);
+}
+
+function miniClose(){
+  // Done changing it: fold again and let the results have the screen back.
+  miniLock = false;
+  miniSync();
 }
 
 function wire(){
   document.querySelectorAll("th[data-s]").forEach(b=>b.closest("th").setAttribute("data-sortable",""));
   $("#miniExpand").onclick = miniOpen;
   $("#miniChange").onclick = miniOpen;
-  const sentinel = $("#minisentinel");
-  if(sentinel && "IntersectionObserver" in window){
-    new IntersectionObserver(es=>{
-      // Above the viewport, not merely out of it: a sentinel below the fold on a
-      // tall screen is not someone who has scrolled.
-      const e = es[es.length-1];
-      miniPast = !e.isIntersecting && e.boundingClientRect.top < 0;
-      miniSync();
-    }, {threshold:0}).observe(sentinel);
-  }
+  // Scrolling down while the search is open is the reader going back to the
+  // results, so the bar folds again and gets out of their way.
+  let lastY = 0, raf = 0;
+  addEventListener("scroll", ()=>{ if(raf) return;
+    raf = requestAnimationFrame(()=>{ raf = 0;
+      const y = window.scrollY;
+      if(Date.now() < miniSettle){ lastY = y; return; }
+      if(miniLock && y > lastY + 8 && y > 40){ $("#q").blur(); miniClose(); }
+      lastY = y;
+    });
+  }, {passive:true});
   $("#q").addEventListener("focus", miniSync);
-  $("#q").addEventListener("blur", ()=>setTimeout(miniSync, 0));
+  // A phone dismisses its keyboard by blurring the field, which is the clearest
+  // signal there is that the reader has finished asking and wants to read.
+  $("#q").addEventListener("blur", ()=>setTimeout(miniClose, 0));
   let t;
   $("#q").oninput=e=>{clearTimeout(t);t=setTimeout(()=>{
     S.qRaw=e.target.value; S.q=S.qRaw.trim().toLowerCase();
@@ -1766,6 +1766,10 @@ function showResults(on){
   if(l) l.hidden=!!on;
   if(r) r.hidden=!on;
   document.body.classList.toggle("landing",!on);
+  // Results appearing or going away is the one event that decides whether the
+  // app bar should be folded, so it is asked here rather than from each of the
+  // several paths that end up showing them.
+  if(typeof miniSync === "function") miniSync();
 }
 function apply(){
   if(S.tab==="s") return applySup();
