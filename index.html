@@ -1393,8 +1393,11 @@ function wire(){
   // being tapped vanished mid-tap, the release landed on whatever row had moved
   // under the finger, and moving between views stopped working altogether. A
   // press inside the bar means the reader is using it.
+  // Long enough to span a tap, and no longer: held for most of a second it also
+  // swallowed a deliberate blur arriving just after, so pressing Change and
+  // then dismissing the keyboard left the bar open.
   addEventListener("pointerdown", e=>{
-    if(e.target && e.target.closest && e.target.closest(".appbar")) miniHold = Date.now() + 700;
+    if(e.target && e.target.closest && e.target.closest(".appbar")) miniHold = Date.now() + 300;
   }, {capture:true, passive:true});
   // A phone dismisses its keyboard by blurring the field, which is the clearest
   // signal there is that the reader has finished asking and wants to read —

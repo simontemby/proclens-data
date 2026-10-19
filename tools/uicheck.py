@@ -63,9 +63,16 @@ def check(pw, url, width, height, label):
     pg.goto(url, wait_until="networkidle")
     pg.wait_for_timeout(2500)
     pg.fill("#q", "Deloitte")
-    pg.wait_for_timeout(3500)
+    # Published, the months arrive over the network. Waiting a fixed moment
+    # asserted against a search that had not happened yet.
+    try:
+        pg.wait_for_function("()=>!document.querySelector('#results').hidden && (S.view||[]).length>0",
+                             timeout=20000)
+    except Exception:
+        pass
+    pg.wait_for_timeout(600)
     pg.eval_on_selector("#q", "e=>e.blur()")
-    pg.wait_for_timeout(300)
+    pg.wait_for_timeout(500)
 
     # The bar's full height, measured with it open.
     pg.click("#miniChange")
