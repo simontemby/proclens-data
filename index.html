@@ -702,6 +702,12 @@ const JURISDICTIONS={
 const S={cidx:null,monthIx:null,months:new Map(),detail:new Map(),terms:new Map(),upd:null,updDetail:null,
   rows:[],view:[],sup:[],supView:[],supFilter:"",nswSup:undefined,groups:undefined,series:undefined,page:0,sPage:0,PER:100,query:null,qRaw:"",searched:null,
   q:"",agency:"",sort:"pub",flags:new Set(),d1:"",d2:"",v1:null,v2:null,tab:"c",
+  // One search box, four views, a query each. A keyword that finds a supplier's
+  // awarded contracts is rarely the keyword that finds what they might bid on
+  // next, and carrying it into the open tenders silently matched none of 6,743
+  // notices — a reader looking for what is coming up was shown an empty list
+  // and no reason for it.
+  qTab:{c:"",s:"",a:"",n:""},
   jur:"cth",state:{nsw:new Map(),vic:new Map()},stateIdx:{},agIdx:undefined,audits:undefined,budget:undefined,
   atm:new Map(),bi:new Map(),biIdx:undefined,atmRows:[],atmView:[],alerts:[],nPage:0,nStatus:"open",nWatch:"",nDesc:false};
 const $=s=>document.querySelector(s);
@@ -1086,7 +1092,7 @@ async function boot(){
         ? " · "+esc(compact(t.contradicted.value_aud).replace(" trillion","T").replace(" billion","B"))+" disputed":""}`+
       `</small></dd></div>`;
   }).join("");
-  buildAgencies(); buildChips(); buildJur(); wire();
+  buildAgencies(); buildChips(); buildJur(); wire(); askFor(S.tab);
   // Not awaited: the banner is one small file and must never hold up the page.
   stalenessBanner();
   await ensureMonths(monthsFor(S.d1,S.d2));
@@ -1287,6 +1293,7 @@ function filterBadge(){
 let miniLock = false;     // held open until the reader asks for the results again
 let miniSaving = 0;       // height folding gives back, learned the first time it folds
 let miniSettle = 0;       // until when the page's own scrolling is not the reader's
+let miniHold = 0;         // a press inside the bar: the reader is using it, not leaving it
 
 function miniSummary(){
   const q = (S.qRaw || "").trim();
@@ -1381,9 +1388,23 @@ function wire(){
     });
   }, {passive:true});
   $("#q").addEventListener("focus", miniSync);
+  // Pressing anything in the bar blurs the search field, and folding on that
+  // blur took the bar away between a finger going down and coming up: the tab
+  // being tapped vanished mid-tap, the release landed on whatever row had moved
+  // under the finger, and moving between views stopped working altogether. A
+  // press inside the bar means the reader is using it.
+  addEventListener("pointerdown", e=>{
+    if(e.target && e.target.closest && e.target.closest(".appbar")) miniHold = Date.now() + 700;
+  }, {capture:true, passive:true});
   // A phone dismisses its keyboard by blurring the field, which is the clearest
-  // signal there is that the reader has finished asking and wants to read.
-  $("#q").addEventListener("blur", ()=>setTimeout(miniClose, 0));
+  // signal there is that the reader has finished asking and wants to read —
+  // unless they are reaching for something else in the bar.
+  $("#q").addEventListener("blur", ()=>setTimeout(()=>{
+    if(Date.now() < miniHold) return;
+    const a = document.activeElement;
+    if(a && a.closest && a.closest(".appbar")) return;
+    miniClose();
+  }, 60));
   let t;
   $("#q").oninput=e=>{clearTimeout(t);t=setTimeout(()=>{
     S.qRaw=e.target.value; S.q=S.qRaw.trim().toLowerCase();
@@ -1500,7 +1521,19 @@ function wire(){
   filterBadge();
 }
 function switchTab(t){
+  // Each view keeps the search it was last given, and is handed it back on the
+  // way in. Nothing is discarded: a reader who looks at the open tenders and
+  // comes back to the contracts finds the search they were in the middle of.
+  if(S.tab!==t){
+    S.qTab[S.tab]=S.qRaw;
+    S.qRaw=S.qTab[t]||"";
+    S.q=S.qRaw.trim().toLowerCase();
+    S.query=S.q?parseQuery(S.qRaw):null;
+    S.searched=null;
+    $("#q").value=S.qRaw;
+  }
   S.tab=t;
+  askFor(t);
   if(t!=="c") showResults(true);
   for(const k of ["c","s","n","a"]){
     $("#tab-"+k).setAttribute("aria-selected",String(t===k));
@@ -1526,6 +1559,22 @@ function switchTab(t){
    contract corpus: an approach and an award are different kinds of fact, and
    folding a notice with no value into a table of committed spend would invite
    exactly the reading the data does not support. */
+const ASKS={
+  c:"Search subject, supplier, agency, ABN or CN\u2026",
+  s:"Search suppliers by name or ABN\u2026",
+  n:"Search open tenders by subject or agency\u2026",
+  a:"The analysis is drawn across the whole archive",
+};
+
+function askFor(t){
+  const q = $("#q");
+  q.placeholder = ASKS[t] || ASKS.c;
+  // The analysis draws series computed over the whole archive, which no search
+  // here narrows. A box that accepts a query and ignores it is worse than one
+  // that says so.
+  q.disabled = t === "a";
+}
+
 const NSTATUS={all:"Everything",open:"Open now",soon:"Closing within 14 days",closed:"Closed"};
 
 async function loadAtm(){
@@ -2125,6 +2174,9 @@ async function openRoute(){
   // the archive already finds one, so the link reuses that rather than
   // inventing a second path to the same row.
   $("#q").value = id; S.qRaw = id; S.q = id.toLowerCase();
+  // Recorded against this view as well, or a reader who follows a link, looks
+  // at the open tenders and comes back finds the contract they arrived for gone.
+  S.qTab[S.tab] = id;
   await runSearch();
   const r = S.rows.find(x => String(x.cn).toLowerCase() === id.toLowerCase());
   if(r) openContract(r, true);

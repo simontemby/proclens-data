@@ -135,11 +135,58 @@ def check(pw, url, width, height, label):
     pg.wait_for_timeout(1200)
     ok(not folded(pg), "it stays open while the reader is typing")
 
+    # Moving between views, which a reader does with a finger rather than with a
+    # synthetic click: the bar must not fold out from under the tap.
+    was_searching = pg.evaluate("document.querySelector('#q').value")
+    pg.eval_on_selector("#q", "e=>e.blur()")
+    pg.mouse.wheel(0, 400)
+    pg.wait_for_timeout(500)
+    pg.click("#miniChange")
+    pg.wait_for_timeout(1200)
+    box = pg.evaluate("""()=>{const r=document.querySelector('#tab-n').getBoundingClientRect();
+        return {x:Math.round(r.x+r.width/2), y:Math.round(r.y+r.height/2)};}""")
+    pg.mouse.move(box["x"], box["y"])
+    pg.mouse.down()
+    pg.wait_for_timeout(90)
+    under = pg.evaluate("()=>{const e=document.elementFromPoint(%d,%d);"
+                        "return e?(e.closest('.tab')?'tab':(e.id||e.tagName)):null;}"
+                        % (box["x"], box["y"]))
+    ok(under == "tab", "the tab stays under the finger through a tap", f"found {under!r}")
+    pg.mouse.up()
+    pg.wait_for_timeout(1500)
+    ok(pg.evaluate("S.tab") == "n", "tapping a tab moves between views",
+       f"still on {pg.evaluate('S.tab')!r}")
+
+    # Each view searches for itself. A contracts keyword carried into the open
+    # tenders matched none of 6,743 notices.
+    ok(pg.evaluate("document.querySelector('#q').value") == "",
+       "the open tenders start unfiltered by the contracts search",
+       repr(pg.evaluate("document.querySelector('#q').value")))
+    shown = pg.evaluate("(S.atmView||[]).length")
+    ok(shown > 0, "the open tenders actually show notices", f"{shown} shown")
+
+    pg.fill("#q", "cyber")
+    pg.wait_for_timeout(2500)
+    pg.evaluate("switchTab('c')")
+    pg.wait_for_timeout(2000)
+    back = pg.evaluate("document.querySelector('#q').value")
+    ok(back == was_searching,
+       "coming back, the contracts search is still there",
+       f"expected {was_searching!r}, found {back!r}")
+    pg.evaluate("switchTab('n')")
+    pg.wait_for_timeout(2000)
+    ok(pg.evaluate("document.querySelector('#q').value") == "cyber",
+       "and the open tenders remember theirs")
+    pg.evaluate("switchTab('c')")
+    pg.wait_for_timeout(1500)
+
     # The analysis view has no result set, so it must not claim a count.
     pg.click("#tab-a")
     pg.wait_for_timeout(2500)
     pg.eval_on_selector("#q", "e=>e.blur()")
     pg.wait_for_timeout(900)
+    ok(pg.evaluate("document.querySelector('#q').disabled"),
+       "the analysis view does not offer a search it ignores")
     if folded(pg):
         a = pg.evaluate("""()=>({label:document.querySelector('#miniLabel').textContent,
             count:document.querySelector('#miniCount').textContent})""")
