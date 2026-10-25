@@ -101,7 +101,7 @@ jobs:
           if grep -rlq '^<<<<<<< ' data 2>/dev/null; then
             echo 'refusing to commit: conflict markers in data/' >&2; exit 1
           fi
-          git add data/nsw
+          git add README.md data/nsw
           if git diff --staged --quiet; then
             echo "nothing new"; exit 0
           fi

@@ -1669,6 +1669,11 @@ function noticeMatch(r,qq){
    between 2021 and 2024 carries either. Filtering on one of those for those
    years returns a number that looks like an answer and is wrong by two orders of
    magnitude, so the years are named wherever the filter is on. */
+// How long the whole archive may go without a rebuild before the page says so.
+// Several jobs rebuild it and the slowest runs weekly, so ten days is a missed
+// run and then some — abnormal, and worth saying a week before a fortnight of
+// failures could pass unmentioned.
+const BUILD_QUIET_DAYS=10;
 const THIN_COVERAGE = 1.0;   // per cent of a year's contracts carrying the flag
 function coverageWarning(){
   const cov=((S.cidx&&S.cidx.totals)||{}).flag_coverage||{};
@@ -1707,16 +1712,44 @@ async function stalenessBanner(){
     if(r.ok) f=await r.json();
   }catch(e){}
   const el=$("#stale"); if(!el) return;
-  const bad=((f&&f.stores)||[]).filter(s=>s.overdue||s.missing);
-  if(!bad.length){ el.hidden=true; el.innerHTML=""; return; }
-  const say=s=>s.missing
-    ?`<b>${esc(s.label)}</b> is not in this build at all`
-    :`<b>${esc(s.label)}</b> last changed ${s.days_old.toLocaleString()} days ago, `+
-     `against a source that publishes at least every ${s.cadence_days}`;
-  el.innerHTML=`<div class="warn">`+
-    `${bad.length===1?"One register has":`${bad.length} registers have`} stopped `+
-    `arriving: ${bad.map(say).join("; ")}. `+
-    `Everything else on this page is as current as its register. `+
+  const hide=()=>{ el.hidden=true; el.innerHTML=""; };
+  if(!f||!f.stores) return hide();
+
+  // Ages are worked out here rather than read from the file. The build writes
+  // how old each store was at the moment it ran, and when the build itself
+  // stopped — seven runs in a fortnight, every one of them stopped by a check
+  // that failed as the archive grew — that file froze with every store recorded
+  // as nought days old. The one thing meant to notice an archive going quiet
+  // spent a fortnight reporting that all was well, because it was quoting a
+  // fortnight-old opinion of the time.
+  const days=iso=>{
+    if(!iso) return null;
+    const t=Date.parse(String(iso).slice(0,10));
+    return isFinite(t)?Math.floor((Date.now()-t)/864e5):null;
+  };
+  const own=days(f.generated);
+  const bad=f.stores.filter(s=>{
+    if(s.missing) return true;
+    const d=days(s.generated);
+    return s.cadence_days && d!=null && d>s.cadence_days;
+  });
+
+  const out=[];
+  // A build that has stopped running is the bigger fact, and it is the reason
+  // the rest of this cannot be trusted either, so it goes first.
+  if(own!=null&&own>BUILD_QUIET_DAYS)
+    out.push(`<b>The archive has not been rebuilt for ${own.toLocaleString()} days.</b> `+
+      `Nothing below it has been checked since, so every register here may be `+
+      `older than it says.`);
+  for(const s of bad){
+    const d=days(s.generated);
+    out.push(s.missing
+      ? `<b>${esc(s.label)}</b> is not in this build at all`
+      : `<b>${esc(s.label)}</b> last changed ${d.toLocaleString()} days ago, `+
+        `against a source that publishes at least every ${s.cadence_days}`);
+  }
+  if(!out.length) return hide();
+  el.innerHTML=`<div class="warn">${out.join(" ")} `+
     `<a href="https://github.com/simontemby/proclens-data/actions" rel="noopener">`+
     `The collection runs are public.</a></div>`;
   el.hidden=false;

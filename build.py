@@ -700,6 +700,47 @@ STORES = [
 ]
 
 
+# The register table in the README, which states how much the archive holds.
+README_ROWS = [
+    ("Commonwealth",    "corpus/index.json", "contracts"),
+    ("Victoria",        "vic/index.json",    "contracts"),
+    ("New South Wales", "nsw/index.json",    "contracts"),
+]
+
+
+def update_readme(path="README.md"):
+    """Write what the archive holds into the README that says so.
+
+    This number was asserted rather than written for a fortnight, and an
+    assertion about a growing archive fails every time it grows: seven runs
+    across three workflows stopped on "README says the archive holds 1,323,539
+    contracts; it holds 1,325,378", and because the check runs before the commit,
+    nothing was published at all. The archive quietly stopped updating on the
+    strength of a true statement about a README.
+
+    A figure the build already knows is not a fact to check. It is output."""
+    try:
+        text = open(path, encoding="utf-8").read()
+    except OSError:
+        return 0
+    out, changed = text, 0
+    for label, store, key in README_ROWS:
+        got = ((read_json(os.path.join(DATA, store), {}) or {}).get("totals") or {}).get(key)
+        if not got:
+            continue
+        # Only the count is rewritten; whatever else the row says about the
+        # register — a snapshot date, a threshold — is left as written.
+        pat = re.compile(r"^(\|\s*" + re.escape(label) + r"\s*\|\s*)([\d,]+)", re.M)
+        new_text, n = pat.subn(lambda m: m.group(1) + f"{got:,}", out)
+        if n and new_text != out:
+            changed += 1
+        out = new_text
+    if changed:
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write(out)
+    return changed
+
+
 def write_freshness():
     """When each store was last written, so the site can say so itself.
 
@@ -923,6 +964,8 @@ def main():
         "agencies": agencies.most_common(), "report": report,
     })
     write_freshness()
+    if update_readme():
+        print("README figures updated", file=sys.stderr)
     print(json.dumps({k: v for k, v in report.items() if k != "cn_collision_sample"}, indent=1),
           file=sys.stderr)
 

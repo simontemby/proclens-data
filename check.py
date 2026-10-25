@@ -24,6 +24,8 @@ import os
 import re
 import sys
 
+from datetime import date
+
 import build
 
 DATA = os.environ.get("PROCLENS_DATA", "data")
@@ -175,11 +177,27 @@ def check_freshness():
     if not f:
         fail("no freshness.json; the site cannot tell a reader how old it is")
         return
+    # Ages worked out now, not read back from the file. The build records how old
+    # each store was when it ran, and a build that has stopped running freezes
+    # those numbers at whatever they were — which is exactly when somebody needs
+    # to be told.
+    today = date.today()
+    def age(iso):
+        try:
+            return (today - date.fromisoformat(str(iso)[:10])).days
+        except (TypeError, ValueError):
+            return None
+    own = age(f.get("generated"))
+    if own is not None and own > 10:
+        note(f"the archive has not been rebuilt for {own} days, so every age "
+             f"below it is at least that stale")
     for s in f.get("stores", []):
         if s.get("missing"):
             note(f"{s['label']} is not in this build at all")
-        elif s.get("overdue"):
-            note(f"{s['label']} last changed {s['days_old']} days ago, against a "
+            continue
+        d = age(s.get("generated"))
+        if s.get("cadence_days") and d is not None and d > s["cadence_days"]:
+            note(f"{s['label']} last changed {d} days ago, against a "
                  f"source that publishes at least every {s['cadence_days']}")
 
 

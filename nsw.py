@@ -470,6 +470,12 @@ def main():
         "suppliers": {a: [e["n"], round(e["v"], 2), len(e["agencies"]), e["name"]]
                       for a, e in sorted(by.items(), key=lambda kv: -kv[1]["v"])},
     })
+    # The README states how much each register holds. This job changes that for
+    # New South Wales without going near build.py, so it writes the figure the
+    # same way build.py does — a number the run already knows is output, not
+    # something to be checked later and fail on.
+    if not args.dry_run:
+        build.update_readme()
     kinds = ", ".join(f"{n:,} {k.lower()}s" for k, n in
                       Counter(r.get("kind") for r in rows).most_common())
     summary = (f"**{len(rows):,} NSW notices** ({kinds}; {len(rows) - before:,} new), "

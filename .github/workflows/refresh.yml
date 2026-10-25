@@ -71,7 +71,7 @@ jobs:
               grep -rl '^<<<<<<< ' data >&2
               return 1
             fi
-            git add data
+            git add README.md data
             if git diff --staged --quiet; then echo "nothing to commit"; return 0; fi
             git commit -m "$1"
             for attempt in 1 2 3 4 5; do
