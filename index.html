@@ -568,6 +568,7 @@ html{touch-action:manipulation}
           <th scope="col">Agency</th>
           <th scope="col" class="hide-m">Category</th>
           <th scope="col" class="hide-m">Type</th>
+          <th scope="col" class="num"><button data-sn="publish">Released</button></th>
           <th scope="col" class="num"><button data-sn="close">Closes</button></th>
           <th scope="col">Status</th>
         </tr></thead>
@@ -709,7 +710,10 @@ const S={cidx:null,monthIx:null,months:new Map(),detail:new Map(),terms:new Map(
   // and no reason for it.
   qTab:{c:"",s:"",a:"",n:""},
   jur:"cth",state:{nsw:new Map(),vic:new Map()},stateIdx:{},agIdx:undefined,audits:undefined,budget:undefined,
-  atm:new Map(),bi:new Map(),biIdx:undefined,atmRows:[],atmView:[],alerts:[],nPage:0,nStatus:"open",nWatch:"",nDesc:false};
+  atm:new Map(),bi:new Map(),biIdx:undefined,atmRows:[],atmView:[],alerts:[],nPage:0,nStatus:"open",nWatch:"",
+  // What came up most recently, first. A reader looking at approaches to market
+  // is asking what has appeared lately, which the closing date does not answer.
+  nSort:"publish",nDesc:true};
 const $=s=>document.querySelector(s);
 const money=n=>n==null?"—":"$"+Math.round(n).toLocaleString("en-AU");
 function catLabel(c){
@@ -1294,6 +1298,12 @@ let miniLock = false;     // held open until the reader asks for the results aga
 let miniSaving = 0;       // height folding gives back, learned the first time it folds
 let miniSettle = 0;       // until when the page's own scrolling is not the reader's
 let miniHold = 0;         // a press inside the bar: the reader is using it, not leaving it
+let miniRead = false;     // the reader has gone down into the results
+
+// Far enough down that folding cannot bounce back: the fold gives about 400
+// pixels back, and landing above the threshold that unfolds again is what stops
+// the bar flickering open and shut on one scroll.
+const MINI_READ_AT = 520;
 
 function miniSummary(){
   const q = (S.qRaw || "").trim();
@@ -1329,7 +1339,14 @@ function miniSync(){
   // changed at all.
   const reading = !$("#results").hidden;
   const typing = document.activeElement === $("#q");
-  const want = reading && !typing && !miniLock;
+  // Only once the reader has asked for something. Opening the archive and
+  // tapping straight to the open tenders is not a search, and folding the
+  // search away before anybody has used it takes away the one control they
+  // came to the page for. Going down into the results counts too: that is
+  // somebody reading rather than composing.
+  const asked = !!(S.qRaw || "").trim() || S.agency || S.v1!=null || S.v2!=null
+             || S.flags.size || S.dateTouched;
+  const want = reading && (asked || miniRead) && !typing && !miniLock;
   if(want !== bar.classList.contains("min")){
     const before = bar.getBoundingClientRect().height;
     bar.classList.toggle("min", want);
@@ -1353,6 +1370,9 @@ function miniOpen(){
   // until they go back to the results, so it cannot fold under them while they
   // are reaching for a filter.
   miniLock = true;
+  // Asking for the search back is the opposite of reading, whatever the scroll
+  // position last latched.
+  miniRead = false;
   // Opening puts 400-odd pixels back above the reader, and the browser moves the
   // scroll position to keep what they were looking at still — its scroll
   // anchoring, doing exactly the right thing. Read as a gesture, that jump looks
@@ -1376,15 +1396,27 @@ function wire(){
   document.querySelectorAll("th[data-s]").forEach(b=>b.closest("th").setAttribute("data-sortable",""));
   $("#miniExpand").onclick = miniOpen;
   $("#miniChange").onclick = miniOpen;
-  // Scrolling down while the search is open is the reader going back to the
-  // results, so the bar folds again and gets out of their way.
-  let lastY = 0, raf = 0;
+  // Where the reader is, not how they got there. Comparing each frame with the
+  // one before asked whether they had scrolled down, and opening the bar pushes
+  // the page down by its own height — which the browser corrects for by moving
+  // the scroll position, and which read as a gesture looked exactly like
+  // scrolling down. Depth is a fact about now; a delta is a guess about intent.
+  //
+  // Latched at two marks rather than recomputed from one, so that folding —
+  // which lifts the page by some 400 pixels — cannot land back across the line
+  // it just crossed and start flickering.
+  let raf = 0;
   addEventListener("scroll", ()=>{ if(raf) return;
     raf = requestAnimationFrame(()=>{ raf = 0;
+      if(Date.now() < miniSettle) return;
       const y = window.scrollY;
-      if(Date.now() < miniSettle){ lastY = y; return; }
-      if(miniLock && y > lastY + 8 && y > 40){ $("#q").blur(); miniClose(); }
-      lastY = y;
+      if(y > MINI_READ_AT){
+        miniRead = true;
+        // Down among the results again, which is the reader finished with the
+        // search they asked to see.
+        if(miniLock){ $("#q").blur(); miniLock = false; }
+      } else if(y < 8) miniRead = false;
+      miniSync();
     });
   }, {passive:true});
   $("#q").addEventListener("focus", miniSync);
@@ -1515,7 +1547,14 @@ function wire(){
   });
   document.querySelectorAll("th button[data-sn]").forEach(b=>{
     b.closest("th").setAttribute("data-sortable","");
-    b.onclick=()=>{ S.nDesc=!S.nDesc; applyAtm(); };
+    b.onclick=()=>{
+      const k=b.dataset.sn;
+      // A first press on a column sorts by it, most useful end first: latest
+      // releases, soonest closes. Pressing the one already chosen reverses it.
+      if(S.nSort===k) S.nDesc=!S.nDesc;
+      else { S.nSort=k; S.nDesc=(k==="publish"); }
+      applyAtm();
+    };
   });
   const sheet=$("#filterSheet");
   $("#filterBtn").onclick=()=>{ if(typeof sheet.showModal==="function") sheet.showModal(); };
@@ -1772,13 +1811,28 @@ function applyAtm(){
     }
     return true;
   });
-  const dir=S.nDesc?-1:1;
+  const dir=S.nDesc?-1:1, by=S.nSort||"publish";
   S.atmView.sort((a,b)=>{
-    // Open notices first, then soonest to close. A closed notice with no date
-    // must not float to the top of a list about what is still available.
-    if((b.open||0)!==(a.open||0)) return (b.open||0)-(a.open||0);
-    const x=a.close||"9999", y=b.close||"9999";
-    return x<y?-dir:x>y?dir:0;
+    if(by==="close"){
+      // Closing soonest, and open notices first: a closed notice with no date
+      // must not float to the top of a list about what is still available.
+      if((b.open||0)!==(a.open||0)) return (b.open||0)-(a.open||0);
+      const x=a.close||"9999", y=b.close||"9999";
+      return x<y?-dir:x>y?dir:0;
+    }
+    // By when it was released. This one is a chronology — what has come up
+    // lately — so open and closed are not separated: doing that would put a
+    // notice released this morning below one released last year.
+    const x=a.publish||"", y=b.publish||"";
+    if(x!==y) return x<y?-dir:dir;
+    const c=a.close||"9999", d=b.close||"9999";
+    return c<d?-1:c>d?1:0;
+  });
+  // Say which column is doing the sorting, for a reader and for a screen reader.
+  document.querySelectorAll("th button[data-sn]").forEach(b=>{
+    const th=b.closest("th");
+    if(b.dataset.sn===(S.nSort||"publish")) th.setAttribute("aria-sort",S.nDesc?"descending":"ascending");
+    else th.removeAttribute("aria-sort");
   });
   S.nPage=0;
   const open=S.atmView.filter(r=>r.open).length;
@@ -1807,7 +1861,7 @@ function drawAlertBar(){
 function drawAtm(){
   const part=(S.atmView||[]).slice(S.nPage*S.PER,(S.nPage+1)*S.PER);
   if(!part.length&&S.nPage===0){
-    $("#tbn").innerHTML='<tr><td colspan="6" class="empty">'+
+    $("#tbn").innerHTML='<tr><td colspan="7" class="empty">'+
       (S.atmRows&&S.atmRows.length?"No notices match these filters."
         :"Loading approaches to market…")+'</td></tr>';
     $("#moren").innerHTML=""; return;
@@ -1827,6 +1881,7 @@ function drawAtm(){
     <td class="t-party" data-th="Agency">${esc(r.agency||"—")}</td>
     <td class="t-party hide-m" data-th="Category">${esc(r.cat_title||r.cat||"—")}</td>
     <td class="hide-m" data-th="Type">${esc(r.atm_type||"—")}</td>
+    <td class="num" data-th="Released">${esc(fmtDMY(r.publish))}</td>
     <td class="num" data-th="Closes">${esc(fmtDMY(r.close))}</td>
     <td data-th="Status">${status}${
       String(r.panel||"").toLowerCase()==="yes"?'<span class="flag" title="A panel arrangement — the approach establishes or draws on a standing panel">panel</span>':""}${

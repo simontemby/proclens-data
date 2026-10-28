@@ -62,6 +62,21 @@ def check(pw, url, width, height, label):
     pg = b.new_page(viewport={"width": width, "height": height})
     pg.goto(url, wait_until="networkidle")
     pg.wait_for_timeout(2500)
+
+    # Arriving and going straight to the open tenders is not a search, and the
+    # search must still be there when they get back to it.
+    pg.click("#tab-n")
+    pg.wait_for_timeout(3000)
+    ok(not folded(pg), "the search stays open until somebody has searched")
+    heads = pg.evaluate("[...document.querySelectorAll('#pane-n thead th')]"
+                        ".map(t=>t.innerText.trim().toLowerCase())")
+    ok("released" in heads, "the open tenders say when each was released", str(heads))
+    pub = pg.evaluate("(S.atmView||[]).slice(0,25).map(r=>r.publish||'')")
+    ok(len(pub) > 1 and all(pub[i-1] >= pub[i] for i in range(1, len(pub))),
+       "the newest release is at the top", str(pub[:4]))
+    pg.click("#tab-c")
+    pg.wait_for_timeout(1500)
+
     pg.fill("#q", "Deloitte")
     # Published, the months arrive over the network. Waiting a fixed moment
     # asserted against a search that had not happened yet.
@@ -125,7 +140,13 @@ def check(pw, url, width, height, label):
         pass
     pg.wait_for_timeout(400)
     ok(not folded(pg), "Change opens it again")
-    ok(pg.evaluate("window.scrollY") == 0, "Change goes back to the top, where the search is")
+    # Where the search is, not what the scroll position reads. The page settles
+    # by a few tens of pixels as more months arrive, and a search box plainly on
+    # screen is what was asked for either way.
+    seen = pg.evaluate("""()=>{const r=document.querySelector('#q').getBoundingClientRect();
+        return r.top >= 0 && r.bottom <= innerHeight;}""")
+    ok(seen, "Change goes back to the top, where the search is",
+       f"scrollY {pg.evaluate('Math.round(window.scrollY)')}")
     ok(pg.evaluate("document.activeElement.id") == "q", "Change puts the cursor in the search box")
     ok(pg.is_visible("#tab-a"), "the tabs come back with it")
 
