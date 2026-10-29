@@ -57,7 +57,7 @@ three different periods is a number that describes nothing.
 |---|---|---|---|---|
 | Commonwealth | 1,325,378 | yes, with ABN | $10,000 | 1999, complete from 2014 |
 | Victoria | 57,150 *(snapshot, 4 Oct 2026)* | **no** | $100,000 (VGPB) | 2003 |
-| New South Wales | 18,771 | yes, with ABN | $150,000 (GIPA) | 2006 |
+| New South Wales | 18,943 | yes, with ABN | $150,000 (GIPA) | 2006 |
 
 **Victoria is a dated snapshot, not a feed.** 57,150 contracts collected on 4 October 2026
 and not refreshed. Two reasons, and the second decides it: the platform sits behind
