@@ -55,7 +55,7 @@ three different periods is a number that describes nothing.
 
 | | Contracts | Suppliers named | Threshold | From |
 |---|---|---|---|---|
-| Commonwealth | 1,326,282 | yes, with ABN | $10,000 | 1999, complete from 2014 |
+| Commonwealth | 1,327,154 | yes, with ABN | $10,000 | 1999, complete from 2014 |
 | Victoria | 57,150 *(snapshot, 4 Oct 2026)* | **no** | $100,000 (VGPB) | 2003 |
 | New South Wales | 19,367 | yes, with ABN | $150,000 (GIPA) | 2006 |
 
